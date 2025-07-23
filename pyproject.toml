@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ca2roi"
+version = "0.1.0"
+description = "Calcium imaging ROI and bleaching analysis CLI tool"
+authors = ["Your Name <your@email.com>"]
+readme = "README.md"
+requires-python = ">=3.12"
+
+[project.scripts]
+ca2roi = "ca2roi.cli:main"
+
+[project.dependencies]
+click = ">=8.0.0"
+matplotlib = ">=3.0.0"
+numpy = ">=1.20.0"
+opencv-python = ">=4.0.0"
+pillow = ">=8.0.0"
+scikit-image = ">=0.18.0"
