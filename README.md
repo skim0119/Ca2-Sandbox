@@ -40,6 +40,8 @@ import ca2roi
 Project uses `Python3` as a main backend language. It uses `FastAPI` to connect frontend and backend.
 Frontend is developed with `Vue3` and `TypeScript`.
 
+The tool is not yet supported to be launched in a server.
+
 All the core source code is in `src` folder.
 
 - `ca2roi`: `Python` package for analysis functions.

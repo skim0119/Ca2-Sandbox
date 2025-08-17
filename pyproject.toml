@@ -35,10 +35,11 @@ dev = [
     "ruff>=0.1.0",
 ]
 
-[tool.uv.package-data]
-include = [
-    "static/*",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src/ca2roi"]
+
+[tool.hatch.build.targets.wheel.include]
+"static/*" = "static/*"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
