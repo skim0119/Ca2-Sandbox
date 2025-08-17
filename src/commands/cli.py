@@ -1,13 +1,18 @@
+import os
+import json
+import numpy as np
+
 import click
-from .video import process_video
-from .roi import handle_rois, extract_and_save_traces
-from .bleaching import (
+
+from ca2roi.video import process_video
+from ca2roi.roi import handle_rois, extract_and_save_traces
+from ca2roi.bleaching import (
     compute_bleaching,
     save_bleaching,
     save_bleaching_trend_csv,
     plot_bleaching_trend,
 )
-from .fluctuation import (
+from ca2roi.fluctuation import (
     compute_fluctuation_map,
     save_fluctuation_overlay,
     auto_select_rois_from_fluctuation,
@@ -15,11 +20,8 @@ from .fluctuation import (
     save_auto_rois_plot,
     plot_roi_intensity_traces,
 )
-from .roi_similarity import cluster_rois_by_similarity, plot_clustered_rois
-from .utils import ensure_workspace
-import os
-import json
-import numpy as np
+from ca2roi.roi_similarity import cluster_rois_by_similarity, plot_clustered_rois
+from ca2roi.utils import ensure_workspace
 
 
 @click.command()

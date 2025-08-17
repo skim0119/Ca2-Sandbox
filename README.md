@@ -1,6 +1,7 @@
 # MiV-Ca2 Intensity Analysis Toolbox
 
 A CLI tool for calcium imaging video post-processing: bleaching analysis, ROI selection, and trace extraction.
+
 The package is developed to provide light-weight and easy-to-use tools for calcium imaging video analysis.
 Data can be saved in csv format for further analysis.
 (Please note in [issue](https://github.com/skim0119/CA2-Sandbox/issues) if you have desired format other than csv).
@@ -13,11 +14,7 @@ Data can be saved in csv format for further analysis.
 
 `ca2roi-gui`
 
-Install dependencies (using uv, pip, or your preferred tool):
-
 ## CLI usage (for batch processing)
-
-A package 
 
 ```
 ca2roi <video_path> [--workspace <output_folder>]
@@ -32,7 +29,16 @@ The tool will:
 - Allow interactive ROI selection (or load existing ROIs)
 - Save ROI traces, ROI images, and ROI locations
 
+## Python-package ca2roi
+
+```py
+import ca2roi
+```
+
 ## Project Structure
+
+Project uses `Python3` as a main backend language. It uses `FastAPI` to connect frontend and backend.
+Frontend is developed with `Vue3` and `TypeScript`.
 
 All the core source code is in `src` folder.
 

@@ -3,7 +3,7 @@ import tempfile
 import pytest
 from click.testing import CliRunner
 from unittest.mock import patch, Mock, MagicMock, ANY
-from ca2roi.cli import main
+from ca2roi.commands.cli import main
 
 
 @pytest.fixture
