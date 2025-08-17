@@ -1,22 +1,23 @@
-# ca2roi
+# MiV-Ca2 Intensity Analysis Toolbox
 
 A CLI tool for calcium imaging video post-processing: bleaching analysis, ROI selection, and trace extraction.
+The package is developed to provide light-weight and easy-to-use tools for calcium imaging video analysis.
+Data can be saved in csv format for further analysis.
+(Please note in [issue](https://github.com/skim0119/CA2-Sandbox/issues) if you have desired format other than csv).
 
-## Installation
+## Easy installation
+
+`pip install ca2roi`
+
+## Easy launch
+
+`ca2roi-gui`
 
 Install dependencies (using uv, pip, or your preferred tool):
 
-```
-uv pip install -r requirements.txt
-```
+## CLI usage (for batch processing)
 
-Or, if using pyproject.toml:
-
-```
-uv pip install -e .
-```
-
-## Usage
+A package 
 
 ```
 ca2roi <video_path> [--workspace <output_folder>]
@@ -33,9 +34,16 @@ The tool will:
 
 ## Project Structure
 
-- `src/ca2roi/cli.py`: CLI entry point
-- `src/ca2roi/video.py`: Video loading
-- `src/ca2roi/bleaching.py`: Bleaching analysis
-- `src/ca2roi/fluctuation.py`: Fluctuation map
-- `src/ca2roi/roi.py`: ROI selection and trace extraction
-- `src/ca2roi/utils.py`: Utilities
+All the core source code is in `src` folder.
+
+- `ca2roi`: `Python` package for analysis functions.
+- `frontend`: `Vue3` frontend for GUI development
+- `commands`: CLI command scripts, written with `Python` with `click`.
+
+## Contribution / Development
+
+`Makefile` includes useful commands for development.
+
+## Support
+
+This project is mainly developed by [@skim0119](https://github.com/skim0119) as part of the support for [Mind-in-vitro project](https://mattia-lab.com/).
