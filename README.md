@@ -10,6 +10,8 @@ Data can be saved in csv format for further analysis.
 
 `pip install ca2roi`
 
+> Recommend `python3.10+`.
+
 ## Easy launch
 
 `ca2roi-gui`
