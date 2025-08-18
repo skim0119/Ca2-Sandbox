@@ -44,6 +44,34 @@ const emit = defineEmits<Emits>()
 const currentVideo = ref<string>('')
 const videoFrame = ref<string>('')
 
+// Resizable ROI table functionality
+const roiTableHeight = ref(200) // Default height
+const isResizing = ref(false)
+const startY = ref(0)
+const startHeight = ref(0)
+
+const handleResizeMouseDown = (event: MouseEvent) => {
+  isResizing.value = true
+  startY.value = event.clientY
+  startHeight.value = roiTableHeight.value
+  document.addEventListener('mousemove', handleResizeMouseMove)
+  document.addEventListener('mouseup', handleResizeMouseUp)
+}
+
+const handleResizeMouseMove = (event: MouseEvent) => {
+  if (!isResizing.value) return
+
+  const deltaY = event.clientY - startY.value
+  const newHeight = Math.max(100, Math.min(400, startHeight.value + deltaY)) // Min 100px, max 400px
+  roiTableHeight.value = newHeight
+}
+
+const handleResizeMouseUp = () => {
+  isResizing.value = false
+  document.removeEventListener('mousemove', handleResizeMouseMove)
+  document.removeEventListener('mouseup', handleResizeMouseUp)
+}
+
 // Watch for first frame data from backend
 watch(() => props.firstFrameData, (data) => {
   if (data && data.first_frame) {
@@ -377,7 +405,7 @@ watch(() => props.selectedFiles, (files) => {
     <!-- ROI Management Section -->
     <div class="roi-section">
       <h3>Regions of Interest</h3>
-      <div class="roi-list">
+      <div class="roi-list" :style="{ height: roiTableHeight + 'px' }">
         <div v-if="availableROIs.length === 0" class="empty-roi-state">
           <div class="empty-message">No ROIs available</div>
           <div class="empty-hint">Run analysis to detect ROIs</div>
@@ -403,6 +431,13 @@ watch(() => props.selectedFiles, (files) => {
             :style="{ backgroundColor: roi.color }"
           ></div>
           <span class="roi-name">{{ roi.name }}</span>
+        </div>
+        <div
+          class="resize-handle"
+          @mousedown="handleResizeMouseDown"
+          :class="{ 'resizing': isResizing }"
+        >
+          <div class="resize-indicator">⋮⋮</div>
         </div>
       </div>
 
@@ -592,8 +627,39 @@ watch(() => props.selectedFiles, (files) => {
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: #fafafa;
-  max-height: 200px;
   overflow-y: auto;
+  position: relative;
+  transition: height 0.1s ease;
+}
+
+.resize-handle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1));
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 4px 4px;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.2));
+}
+
+.resize-handle.resizing {
+  background: linear-gradient(to bottom, transparent, rgba(52, 152, 219, 0.3));
+}
+
+.resize-indicator {
+  font-size: 12px;
+  color: #666;
+  user-select: none;
+  pointer-events: none;
 }
 
 .roi-item {

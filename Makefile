@@ -12,13 +12,13 @@ install: install-frontend
 # Install frontend using npm only
 install-frontend:
 	@echo "Installing frontend dependencies..."
-	cd src/frontend && npm install
+	cd src/frontend && npm install && npm run build
 	@echo "Frontend installation complete!"
 
 # Build Python package with uv into distributed version
 build: install
 	@echo "Building Python package..."
-	uv build
+	uv sync
 	@echo "Python package build complete!"
 
 # Clean all cache or unnecessary files/folders recursively
@@ -37,15 +37,15 @@ cleanup:
 	find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
-	
+
 	# Clean frontend cache
 	cd src/frontend && rm -rf node_modules 2>/dev/null || true
 	cd src/frontend && rm -f package-lock.json 2>/dev/null || true
 	cd src/frontend && rm -rf .vite 2>/dev/null || true
 	cd src/frontend && rm -rf dist 2>/dev/null || true
-	
+
 	# Clean system cache
 	rm -rf .DS_Store 2>/dev/null || true
 	find . -name ".DS_Store" -delete 2>/dev/null || true
-	
+
 	@echo "Cleanup complete!"
