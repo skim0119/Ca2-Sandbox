@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Optional, List
 import tempfile
 import zipfile
+import numpy as np
+from scipy.optimize import curve_fit
+from sklearn.metrics import r2_score
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +23,8 @@ from .bleaching import (
     save_bleaching,
     save_bleaching_trend_csv,
     plot_bleaching_trend,
+    exponential_decay,
+    inverse_decay,
 )
 from .fluctuation import (
     compute_fluctuation_map,
@@ -74,7 +79,9 @@ def create_app():
     static_dir = Path(__file__).parent.parent.parent / "static"
     if static_dir.exists():
         app.mount(
-            "/static", StaticFiles(directory=str(static_dir), html=True), name="static"
+            "/static",
+            StaticFiles(directory=static_dir.as_posix(), html=True),
+            name="static",
         )
     else:
         raise FileNotFoundError(f"Pre-built static directory not found: {static_dir}")
@@ -88,7 +95,7 @@ app = create_app()
 @app.get("/")
 async def root():
     """Serve the main HTML page."""
-    static_dir = Path(__file__).parent.parent.parent.parent / "static"
+    static_dir = Path(__file__).parent.parent.parent / "static"
     index_path = static_dir / "index.html"
 
     if index_path.exists():
@@ -97,15 +104,37 @@ async def root():
         return JSONResponse(
             {
                 "message": "Ca2ROI Analysis Server",
-                "status": "running",
-                "endpoints": [
-                    "/api/analyze",
-                    "/api/results",
-                    "/api/download",
-                    "/api/version",
-                ],
+                "status": "Pre-built static directory not found",
             }
         )
+
+
+@app.get("/api/version")
+async def get_version():
+    return JSONResponse({"version": ca2roi_version, "package": "ca2roi"})
+
+
+# @app.get("/")
+# async def root():
+#     """Serve the main HTML page."""
+#     static_dir = Path(__file__).parent.parent.parent.parent / "static"
+#     index_path = static_dir / "index.html"
+
+#     if index_path.exists():
+#         return FileResponse(str(index_path))
+#     else:
+#         return JSONResponse(
+#             {
+#                 "message": "Ca2ROI Analysis Server",
+#                 "status": "running",
+#                 "endpoints": [
+#                     "/api/analyze",
+#                     "/api/results",
+#                     "/api/download",
+#                     "/api/version",
+#                 ],
+#             }
+#         )
 
 
 @app.post("/api/analyze")
@@ -242,12 +271,6 @@ async def download_results(session_id: str):
     )
 
 
-@app.get("/api/version")
-async def get_version():
-    """Get the ca2roi version."""
-    return JSONResponse({"version": ca2roi_version, "package": "ca2roi"})
-
-
 @app.post("/api/first-frame")
 async def get_video_first_frame(request: dict):
     """Get the first frame of a video file as a base64 encoded image.
@@ -289,3 +312,281 @@ async def get_video_first_frame(request: dict):
         raise HTTPException(
             status_code=500, detail=f"Failed to get first frame: {str(e)}"
         )
+
+
+# Global cache for analysis results
+analysis_cache = {}
+
+
+@app.post("/api/run-analysis")
+async def run_bleaching_analysis(request: dict):
+    """Run bleaching analysis on a video file.
+
+    Example request body:
+    {
+        "video_path": "/path/to/your/video.mp4"
+    }
+
+    Example response:
+    {
+        "analysis_id": "analysis_abc123",
+        "status": "completed",
+        "bleaching_data": {
+            "time_points": [0.0, 0.033, 0.067, ...],
+            "mean_intensity": [100.5, 98.2, 96.1, ...],
+            "fit_params": {
+                "exponential": [I0, tau],
+                "inverse": [I0, tau]
+            },
+            "r2_scores": {
+                "exponential": 0.985,
+                "inverse": 0.992
+            }
+        }
+    }
+    """
+    video_path = Path(request.get("video_path", ""))
+
+    # Validate video file exists and has supported format
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found: {video_path}"
+        )
+
+    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
+        raise HTTPException(status_code=400, detail="Unsupported file format")
+
+    try:
+        # Check if analysis is already cached
+        video_key = str(video_path)
+        if video_key in analysis_cache:
+            print(f"Using cached analysis for: {video_path}")
+            return JSONResponse(analysis_cache[video_key])
+
+        # Process video and compute bleaching
+        frames, info = process_video(str(video_path))
+        mean_intensity = compute_bleaching(frames)
+
+        # Create time points
+        time_points = np.arange(len(mean_intensity)) / info["fps"]
+
+        # Run both exponential and inverse fits
+        fit_params = {}
+        r2_scores = {}
+
+        # Exponential fit
+        try:
+            I0_guess = mean_intensity[0]
+            tau_guess = time_points[-1] / 3
+            popt_exp, _ = curve_fit(
+                exponential_decay,
+                time_points,
+                mean_intensity,
+                p0=[I0_guess, tau_guess],
+                maxfev=10000,
+            )
+            fit_params["exponential"] = popt_exp.tolist()
+            y_fit_exp = exponential_decay(time_points, *popt_exp)
+            r2_scores["exponential"] = r2_score(mean_intensity, y_fit_exp)
+        except Exception as e:
+            print(f"Warning: Could not fit exponential curve: {e}")
+            fit_params["exponential"] = None
+            r2_scores["exponential"] = None
+
+        # Inverse fit
+        try:
+            I0_guess = mean_intensity[0]
+            tau_guess = time_points[-1] / 2
+            popt_inv, _ = curve_fit(
+                inverse_decay,
+                time_points,
+                mean_intensity,
+                p0=[I0_guess, tau_guess],
+                maxfev=10000,
+            )
+            fit_params["inverse"] = popt_inv.tolist()
+            y_fit_inv = inverse_decay(time_points, *popt_inv)
+            r2_scores["inverse"] = r2_score(mean_intensity, y_fit_inv)
+        except Exception as e:
+            print(f"Warning: Could not fit inverse curve: {e}")
+            fit_params["inverse"] = None
+            r2_scores["inverse"] = None
+
+        # Create analysis result
+        analysis_id = f"analysis_{hash(video_key) % 1000000}"
+        result = {
+            "analysis_id": analysis_id,
+            "status": "completed",
+            "bleaching_data": {
+                "time_points": time_points.tolist(),
+                "mean_intensity": mean_intensity.tolist(),
+                "fit_params": fit_params,
+                "r2_scores": r2_scores,
+                "video_info": {
+                    "width": info["width"],
+                    "height": info["height"],
+                    "fps": info["fps"],
+                    "total_frames": info["n_frames"],
+                },
+            },
+        }
+
+        # Cache the result
+        analysis_cache[video_key] = result
+
+        return JSONResponse(result)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/api/update-fit-preference")
+async def update_fit_preference(request: dict):
+    """Update the user's fit preference (exponential vs inverse).
+
+    Example request body:
+    {
+        "analysis_id": "analysis_abc123",
+        "fit_type": "exponential"  # or "inverse"
+    }
+    """
+    analysis_id = request.get("analysis_id")
+    fit_type = request.get("fit_type")
+
+    if fit_type not in ["exponential", "inverse"]:
+        raise HTTPException(status_code=400, detail="Invalid fit type")
+
+    # In a real implementation, you might save this to a database
+    # For now, we'll just log it
+    print(f"User preference updated: {analysis_id} -> {fit_type}")
+
+    return JSONResponse(
+        {"status": "updated", "analysis_id": analysis_id, "fit_type": fit_type}
+    )
+
+
+@app.post("/api/roi-operations")
+async def handle_roi_operations(request: dict):
+    """Handle ROI operations: create, select, unselect, compute intensity.
+
+    Example request body:
+    {
+        "operation": "create",  # "create", "select", "unselect"
+        "video_path": "/path/to/video.mp4",
+        "roi_data": {
+            "id": 1,
+            "coords": [x0, y0, x1, y1],  # For create operation
+            "selected": true  # For select/unselect operations
+        },
+        "adjust_bleaching": true,
+        "fit_type": "inverse"
+    }
+    """
+    operation = request.get("operation")
+    print(f"🎯 ROI operation requested: {request}")
+    video_path = Path(request.get("video_path", ""))
+
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found: {video_path}"
+        )
+
+    try:
+        # Process video
+        frames, info = process_video(str(video_path))
+
+        if operation == "create":
+            roi_coords = request["roi_data"]["coords"]
+            x0, y0, x1, y1 = roi_coords
+
+            # Create ROI mask
+            roi_mask = np.zeros((info["height"], info["width"]), dtype=bool)
+            roi_mask[y0:y1, x0:x1] = True
+
+            # Compute intensity over time
+            n_frames = frames.shape[0]
+            intensity_trace = np.zeros(n_frames)
+            for frame_idx in range(n_frames):
+                intensity_trace[frame_idx] = frames[frame_idx][roi_mask].mean()
+
+            # Apply bleaching correction if requested
+            adjust_bleaching = request.get("adjust_bleaching", False)
+            fit_type = request.get("fit_type", "inverse")
+
+            if adjust_bleaching:
+                try:
+                    # Compute bleaching trend
+                    mean_intensity = compute_bleaching(frames)
+                    time_points = np.arange(n_frames) / info["fps"]
+
+                    # Get bleaching parameters from cache or compute
+                    video_key = str(video_path)
+                    if video_key in analysis_cache:
+                        bleaching_data = analysis_cache[video_key]["bleaching_data"]
+                        if (
+                            fit_type == "exponential"
+                            and bleaching_data["fit_params"]["exponential"]
+                        ):
+                            I0, tau = bleaching_data["fit_params"]["exponential"]
+                            bleaching_trend = I0 * np.exp(-time_points / tau)
+                        elif (
+                            fit_type == "inverse"
+                            and bleaching_data["fit_params"]["inverse"]
+                        ):
+                            I0, tau = bleaching_data["fit_params"]["inverse"]
+                            bleaching_trend = I0 / (1 + time_points / tau)
+                        else:
+                            # Fallback to polynomial fit
+                            bleaching_trend = np.polyval(
+                                np.polyfit(time_points, mean_intensity, 2), time_points
+                            )
+
+                        # Correct intensity trace
+                        intensity_trace = (
+                            intensity_trace / bleaching_trend * bleaching_trend[0]
+                        )
+                    else:
+                        # If no cached analysis, use simple polynomial fit
+                        print(
+                            f"⚠️ No cached bleaching analysis for {video_key}, using polynomial fit"
+                        )
+                        bleaching_trend = np.polyval(
+                            np.polyfit(time_points, mean_intensity, 2), time_points
+                        )
+                        intensity_trace = (
+                            intensity_trace / bleaching_trend * bleaching_trend[0]
+                        )
+                except Exception as e:
+                    print(
+                        f"⚠️ Bleaching correction failed: {e}, using uncorrected intensity"
+                    )
+                    # Continue without bleaching correction
+
+            return JSONResponse(
+                {
+                    "status": "created",
+                    "roi_id": request["roi_data"]["id"],
+                    "intensity_trace": intensity_trace.tolist(),
+                    "time_points": (np.arange(n_frames) / info["fps"]).tolist(),
+                    "roi_info": {
+                        "coords": roi_coords,
+                        "n_pixels": int(roi_mask.sum()),
+                        "center": [float((x0 + x1) / 2), float((y0 + y1) / 2)],
+                    },
+                }
+            )
+
+        elif operation in ["select", "unselect"]:
+            # For select/unselect, we just return success
+            # The frontend will handle showing/hiding the ROI
+            return JSONResponse(
+                {"status": operation, "roi_id": request["roi_data"]["id"]}
+            )
+
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown operation: {operation}"
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ROI operation failed: {str(e)}")

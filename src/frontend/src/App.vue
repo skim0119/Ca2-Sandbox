@@ -6,7 +6,7 @@ import BleachingCorrection from './components/BleachingCorrection.vue'
 
 // Application state
 const selectedFiles = ref<string[]>([])
-const selectedROIs = ref<number[]>([1]) // ROI 1 is selected by default
+const selectedROIs = ref<number[]>([]) // No ROIs selected by default
 const backendVersion = ref<string>('...')
 const firstFrameData = ref<{
   first_frame: string;
@@ -22,7 +22,9 @@ const firstFrameData = ref<{
 const bleachingData = reactive({
   adjustBleaching: true,
   smoothing: 0.5,
-  fitType: 'exponential' as 'exponential' | 'inverse'
+  fitType: 'inverse' as 'exponential' | 'inverse',
+  analysisData: null as any,
+  analysisId: null as string | null
 })
 
 const fetchBackendVersion = async () => {
@@ -70,10 +72,84 @@ const handleFirstFrameReceived = (data: {
   firstFrameData.value = data
 }
 
-const handleRunAnalysis = () => {
+const handleRunAnalysis = async () => {
+  if (!selectedFiles.value[0]) {
+    console.error('No video selected for analysis')
+    return
+  }
+
   console.log('🚀 Analysis requested for video:', selectedFiles.value[0])
-  // TODO: Implement analysis logic here
-  // This could call the backend analysis API
+
+  try {
+    const response = await fetch('/api/run-analysis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        video_path: selectedFiles.value[0]
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ Analysis completed:', result)
+
+    // Pass the analysis data to the bleaching correction component
+    bleachingData.analysisData = result.bleaching_data
+    bleachingData.analysisId = result.analysis_id
+
+  } catch (error) {
+    console.error('❌ Analysis failed:', error)
+    // Create dummy analysis data for debugging
+    bleachingData.analysisData = createDummyAnalysisData()
+    bleachingData.analysisId = 'dummy_analysis'
+  }
+}
+
+const handleROICreated = (roi: any) => {
+  console.log('🎯 ROI created:', roi)
+  // Update main plot with new ROI intensity trace
+  updateMainPlot()
+}
+
+const handleROIUpdated = (roi: any) => {
+  console.log('🔄 ROI updated:', roi)
+  // Update main plot when ROI selection changes
+  updateMainPlot()
+}
+
+const updateMainPlot = () => {
+  // This will be implemented to update the main plot with ROI intensity traces
+  console.log('📊 Updating main plot with ROI data')
+}
+
+const createDummyAnalysisData = () => {
+  // Create dummy bleaching data for debugging
+  const timePoints = Array.from({ length: 100 }, (_, i) => i * 0.1)
+  const meanIntensity = timePoints.map(t => 100 * Math.exp(-0.05 * t) + Math.random() * 5)
+
+  return {
+    time_points: timePoints,
+    mean_intensity: meanIntensity,
+    fit_params: {
+      exponential: [100.0, 20.0],
+      inverse: [100.0, 15.0]
+    },
+    r2_scores: {
+      exponential: 0.985,
+      inverse: 0.992
+    },
+    video_info: {
+      width: 640,
+      height: 480,
+      fps: 30.0,
+      total_frames: 100
+    }
+  }
 }
 </script>
 
@@ -100,8 +176,14 @@ const handleRunAnalysis = () => {
             :selected-files="selectedFiles"
             :selectedROIs="selectedROIs"
             :first-frame-data="firstFrameData"
+            :bleaching-settings="{
+              adjustBleaching: bleachingData.adjustBleaching,
+              fitType: bleachingData.fitType
+            }"
             @rois-selected="handleROISelection"
             @run-analysis="handleRunAnalysis"
+            @roi-created="handleROICreated"
+            @roi-updated="handleROIUpdated"
           />
         </div>
 
