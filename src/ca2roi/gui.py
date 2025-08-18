@@ -8,11 +8,12 @@ import zipfile
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+import base64
 
 from . import __version__ as ca2roi_version
-from .video import process_video
+from .video import process_video, get_first_frame
 from .roi import handle_rois, extract_and_save_traces
 from .bleaching import (
     compute_bleaching,
@@ -72,7 +73,9 @@ def create_app():
     # Mount static files
     static_dir = Path(__file__).parent.parent.parent / "static"
     if static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        app.mount(
+            "/static", StaticFiles(directory=str(static_dir), html=True), name="static"
+        )
     else:
         raise FileNotFoundError(f"Pre-built static directory not found: {static_dir}")
 
@@ -85,7 +88,7 @@ app = create_app()
 @app.get("/")
 async def root():
     """Serve the main HTML page."""
-    static_dir = Path(__file__).parent.parent.parent / "static"
+    static_dir = Path(__file__).parent.parent.parent.parent / "static"
     index_path = static_dir / "index.html"
 
     if index_path.exists():
@@ -243,3 +246,46 @@ async def download_results(session_id: str):
 async def get_version():
     """Get the ca2roi version."""
     return JSONResponse({"version": ca2roi_version, "package": "ca2roi"})
+
+
+@app.post("/api/first-frame")
+async def get_video_first_frame(request: dict):
+    """Get the first frame of a video file as a base64 encoded image.
+
+    Example request body:
+    {
+        "video_path": "/path/to/your/video.mp4"
+    }
+
+    Example response:
+    {
+        "first_frame": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+        "video_info": {
+            "width": 640,
+            "height": 480,
+            "fps": 30.0,
+            "total_frames": 1000
+        }
+    }
+    """
+    video_path = Path(request.get("video_path", ""))
+
+    # Validate video file exists and has supported format
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found: {video_path}"
+        )
+
+    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
+        raise HTTPException(status_code=400, detail="Unsupported file format")
+
+    try:
+        # Get first frame and video info
+        first_frame, video_info = get_first_frame(str(video_path))
+
+        return JSONResponse({"first_frame": first_frame, "video_info": video_info})
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get first frame: {str(e)}"
+        )

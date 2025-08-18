@@ -1,0 +1,441 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+
+interface Props {
+  selectedFiles: string[]
+}
+
+interface Emits {
+  (e: 'files-selected', files: string[]): void
+  (e: 'video-selected', videoPath: string): void
+  (e: 'first-frame-received', data: {
+    first_frame: string;
+    video_info: {
+      width: number;
+      height: number;
+      fps: number;
+      total_frames: number;
+      debug_mode?: boolean;
+      original_path?: string;
+    }
+  }): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+
+const folderPath = ref<string>('')
+const fileList = ref<string[]>([])
+const selectedVideoPath = ref<string>('')
+
+// Video file extensions to highlight
+// const videoExtensions = ['.avi', '.mp4', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+const videoExtensions = ['.avi', '.mp4', '.mov']  // Video extension depends on cv2 capability
+
+const isVideoFile = (filename: string): boolean => {
+  const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'))
+  return videoExtensions.includes(extension)
+}
+
+const handleFolderSelect = () => {
+  // Create a hidden file input element
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.webkitdirectory = true
+  input.multiple = true
+  input.accept = '.avi,.mp4,.mov' // Only accept video files
+  input.style.display = 'none'
+
+  input.onchange = (event) => {
+    const target = event.target as HTMLInputElement
+    if (target.files && target.files.length > 0) {
+      const files = Array.from(target.files)
+
+      // Get the folder path from the first file
+      const firstFile = files[0]
+      const folderPathParts = firstFile.webkitRelativePath.split('/')
+      folderPathParts.pop() // Remove the filename
+      const folderName = folderPathParts.join('/')
+      folderPath.value = folderName
+
+      // Filter to only include video files and get their full paths
+      const videoFiles = files
+        .filter(file => isVideoFile(file.name))
+        .map(file => file.webkitRelativePath)
+
+      fileList.value = videoFiles
+
+      // Clean up the input element
+      document.body.removeChild(input)
+    }
+  }
+
+  // Add the input to DOM temporarily and trigger the file dialog
+  document.body.appendChild(input)
+  input.click()
+}
+
+const handleFileToggle = async (filename: string) => {
+  const currentSelection = [...props.selectedFiles]
+  const index = currentSelection.indexOf(filename)
+
+  if (index > -1) {
+    currentSelection.splice(index, 1)
+  } else {
+    currentSelection.push(filename)
+  }
+
+  emit('files-selected', currentSelection)
+
+  // If this is a single video selection, automatically send to backend
+  if (currentSelection.length === 1 && isVideoFile(filename)) {
+    selectedVideoPath.value = currentSelection[0]
+    emit('video-selected', currentSelection[0])
+
+    try {
+      const result = await sendVideoToBackend(currentSelection[0])
+      // Emit the first frame data to parent component
+      emit('first-frame-received', result)
+    } catch (error) {
+      console.error('Failed to get first frame:', error)
+    }
+  } else {
+    selectedVideoPath.value = ''
+  }
+}
+
+const sendVideoToBackend = async (videoPath: string) => {
+  console.log('🔍 Attempting to access video at path:', videoPath)
+
+  try {
+    console.log('📡 Making API call to /api/first-frame...')
+    const response = await fetch('/api/first-frame', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        video_path: videoPath
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ Video processing successful:', result)
+    return result
+  } catch (error) {
+    console.error('❌ Error sending video to backend:', error)
+
+    // Create dummy data for debugging
+    const dummyData = createDummyFrameData(videoPath)
+    console.log('🔄 Using dummy data for debugging:', dummyData)
+
+    return dummyData
+  }
+}
+
+const createDummyFrameData = (videoPath: string) => {
+  // Create a dummy SVG image with debugging information
+  const dummySvg = `
+    <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#2c3e50"/>
+      <text x="50%" y="30%" text-anchor="middle" fill="white" font-family="Arial" font-size="16" font-weight="bold">
+        🔧 DEV MODE - DUMMY FRAME
+      </text>
+      <text x="50%" y="45%" text-anchor="middle" fill="#3498db" font-family="Arial" font-size="12">
+        Backend not available
+      </text>
+      <text x="50%" y="60%" text-anchor="middle" fill="#e74c3c" font-family="Arial" font-size="10">
+        Video Path: ${videoPath}
+      </text>
+      <text x="50%" y="75%" text-anchor="middle" fill="#f39c12" font-family="Arial" font-size="10">
+        API Call: POST /api/first-frame
+      </text>
+      <text x="50%" y="85%" text-anchor="middle" fill="#95a5a6" font-family="Arial" font-size="8">
+        Check console for debugging info
+      </text>
+    </svg>
+  `
+
+  const base64Svg = btoa(dummySvg)
+  const dummyImage = `data:image/svg+xml;base64,${base64Svg}`
+
+  return {
+    first_frame: dummyImage,
+    video_info: {
+      width: 400,
+      height: 300,
+      fps: 30.0,
+      total_frames: 1000,
+      debug_mode: true,
+      original_path: videoPath
+    }
+  }
+}
+</script>
+
+<template>
+  <div class="file-selector">
+    <h3>File Selection</h3>
+
+    <!-- Folder Selection -->
+    <div class="folder-section">
+      <button @click="handleFolderSelect" class="select-folder-btn">
+        Browse for video folder
+      </button>
+      <div class="folder-help">
+        Select a folder containing video files.
+      </div>
+      <div v-if="folderPath" class="folder-path">
+        Selected folder: {{ folderPath }}
+      </div>
+    </div>
+
+    <!-- File List -->
+    <div class="file-list-section">
+      <div class="file-list-header">
+        <h4>Video files</h4>
+      </div>
+
+      <div class="file-list">
+        <div
+          v-for="filename in fileList"
+          :key="filename"
+          :class="[
+            'file-item',
+            { 'video-file': isVideoFile(filename) },
+            { 'selected': selectedFiles.includes(filename) }
+          ]"
+          @click="handleFileToggle(filename)"
+        >
+          <input
+            type="checkbox"
+            :checked="selectedFiles.includes(filename)"
+            @change="handleFileToggle(filename)"
+            class="file-checkbox"
+          />
+          <span class="file-name">{{ filename }}</span>
+        </div>
+      </div>
+
+      <div class="file-legend">
+        <span class="legend-item">
+          <span class="legend-color video"></span>
+          Video files (avi, mp4, mov)
+        </span>
+      </div>
+
+
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.file-selector {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-selector h3 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+}
+
+.folder-section {
+  margin-bottom: 1rem;
+}
+
+.select-folder-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.select-folder-btn:hover {
+  background-color: #2980b9;
+}
+
+.folder-help {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+}
+
+.folder-path {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #666;
+  word-break: break-all;
+  background-color: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+}
+
+.file-list-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.file-list-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.action-btn {
+  padding: 0.25rem 0.5rem;
+  background-color: #ecf0f1;
+  border: 1px solid #bdc3c7;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background-color: #d5dbdb;
+}
+
+.file-list {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow-y: auto;
+  background-color: #fafafa;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-item:hover {
+  background-color: #f0f0f0;
+}
+
+.file-item.selected {
+  background-color: #e3f2fd;
+}
+
+.file-item.video-file {
+  background-color: #fff3e0;
+}
+
+.file-item.video-file.selected {
+  background-color: #ffe0b2;
+}
+
+.file-checkbox {
+  margin-right: 0.5rem;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  color: #333;
+  flex: 1;
+  word-break: break-all;
+}
+
+.file-legend {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.video {
+  background-color: #fff3e0;
+  border: 1px solid #ffb74d;
+}
+
+.selected-video-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.selected-video-info h5 {
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.selected-video-info p {
+  margin: 0 0 1rem 0;
+  font-size: 0.8rem;
+  color: #666;
+  word-break: break-all;
+  background-color: #fff;
+  padding: 0.5rem;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+}
+
+.process-btn {
+  padding: 0.5rem 1rem;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.process-btn:hover {
+  background-color: #218838;
+}
+
+.process-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+</style>
