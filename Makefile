@@ -6,7 +6,7 @@ all: install
 # Install Python part (includes installing frontend beforehand)
 install: install-frontend
 	@echo "Installing Python dependencies..."
-	uv sync
+	uv sync --all-extras
 	@echo "Python installation complete!"
 
 # Install frontend using npm only
@@ -18,7 +18,7 @@ install-frontend:
 # Build Python package with uv into distributed version
 build: install
 	@echo "Building Python package..."
-	uv sync
+	uv build
 	@echo "Python package build complete!"
 
 # Clean all cache or unnecessary files/folders recursively

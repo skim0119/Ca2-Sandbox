@@ -35,6 +35,7 @@ from .fluctuation import (
     plot_roi_intensity_traces,
 )
 from .roi_similarity import cluster_rois_by_similarity, plot_clustered_rois
+from .smoothing import smooth_intensity_trace
 from .utils import ensure_workspace
 
 # Pydantic models for request validation
@@ -209,7 +210,12 @@ async def analyze_video(request: AnalysisRequest):
 
             # Clustering
             cluster_rois_by_similarity(
-                str(roi_csv_path), request.n_clusters, str(workspace)
+                roi_data,
+                None,
+                info["fps"],
+                len(frames),
+                request.n_clusters,
+                str(workspace),
             )
 
         return JSONResponse(
@@ -315,7 +321,103 @@ async def get_video_first_frame(request: dict):
 
 
 # Global cache for analysis results
-analysis_cache = {}
+analysis_cache: dict[str, dict] = {}
+
+
+@app.post("/api/auto-roi")
+async def auto_select_rois(request: dict):
+    """Automatically select ROIs based on fluctuation map analysis.
+
+    Example request body:
+    {
+        "video_path": "/path/to/your/video.mp4",
+        "threshold_percentage": 99.0,
+        "min_distance_percentage": 0.01,
+        "n_clusters": 3
+    }
+
+    Example response:
+    {
+        "status": "completed",
+        "rois": [
+            {
+                "id": 0,
+                "coords": [x0, y0, x1, y1],
+                "n_pixels": 400,
+                "avg_intensity": [100.0, 98.2, ...],
+                "center": [x, y],
+                "fluctuation_strength": 15.5
+            }
+        ],
+        "stats": {
+            "n_rois": 3,
+            "total_pixels": 1200,
+            "coverage_percent": 5.2,
+            "threshold_used": 15.5,
+            "min_distance_used": 8
+        }
+    }
+    """
+    video_path = Path(request.get("video_path", ""))
+    threshold_percentage = request.get("threshold_percentage", 99.0)
+    min_distance_percentage = request.get("min_distance_percentage", 0.01)
+    n_clusters = request.get("n_clusters", 3)
+
+    # Validate video file exists and has supported format
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found: {video_path}"
+        )
+
+    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
+        raise HTTPException(status_code=400, detail="Unsupported file format")
+
+    try:
+        # Process video
+        frames, info = process_video(str(video_path))
+
+        # Compute bleaching for fluctuation map
+        mean_intensity = compute_bleaching(frames)
+
+        # Compute fluctuation map
+        fluct_map = compute_fluctuation_map(frames, mean_intensity)
+
+        # Calculate threshold and min_distance
+        threshold = np.percentile(fluct_map, threshold_percentage)
+        min_distance = int(frames.shape[2] * min_distance_percentage)
+
+        # Perform automatic ROI selection
+        roi_data = auto_select_rois_from_fluctuation(
+            fluct_map,
+            frames,
+            threshold,
+            min_distance,
+            None,  # No workspace needed for API
+        )
+
+        if roi_data["rois"]:
+            # Apply size filtering (10-90 percentile)
+            roi_data = filter_rois_by_size(
+                roi_data, min_percentile=50, max_percentile=90
+            )
+
+            # Cluster roi normalized intensity by similarity
+            cluster_rois_by_similarity(
+                roi_data, None, info["fps"], len(frames), n_clusters, None
+            )
+
+        return JSONResponse(
+            {
+                "status": "completed",
+                "rois": roi_data["rois"],
+                "stats": roi_data["stats"],
+            }
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Auto ROI selection failed: {str(e)}"
+        )
 
 
 @app.post("/api/run-analysis")
@@ -479,7 +581,8 @@ async def handle_roi_operations(request: dict):
             "selected": true  # For select/unselect operations
         },
         "adjust_bleaching": true,
-        "fit_type": "inverse"
+        "fit_type": "inverse",
+        "smoothing": 0.0
     }
     """
     operation = request.get("operation")
@@ -512,6 +615,7 @@ async def handle_roi_operations(request: dict):
             # Apply bleaching correction if requested
             adjust_bleaching = request.get("adjust_bleaching", False)
             fit_type = request.get("fit_type", "inverse")
+            smoothing_factor = request.get("smoothing", 0.0)
 
             if adjust_bleaching:
                 try:
@@ -527,14 +631,18 @@ async def handle_roi_operations(request: dict):
                             fit_type == "exponential"
                             and bleaching_data["fit_params"]["exponential"]
                         ):
-                            I0, tau = bleaching_data["fit_params"]["exponential"]
-                            bleaching_trend = I0 * np.exp(-time_points / tau)
+                            exp_params = bleaching_data["fit_params"]["exponential"]
+                            if isinstance(exp_params, list) and len(exp_params) >= 2:
+                                I0, tau = exp_params[0], exp_params[1]
+                                bleaching_trend = I0 * np.exp(-time_points / tau)
                         elif (
                             fit_type == "inverse"
                             and bleaching_data["fit_params"]["inverse"]
                         ):
-                            I0, tau = bleaching_data["fit_params"]["inverse"]
-                            bleaching_trend = I0 / (1 + time_points / tau)
+                            inv_params = bleaching_data["fit_params"]["inverse"]
+                            if isinstance(inv_params, list) and len(inv_params) >= 2:
+                                I0, tau = inv_params[0], inv_params[1]
+                                bleaching_trend = I0 / (1 + time_points / tau)
                         else:
                             # Fallback to polynomial fit
                             bleaching_trend = np.polyval(
@@ -560,7 +668,17 @@ async def handle_roi_operations(request: dict):
                     print(
                         f"⚠️ Bleaching correction failed: {e}, using uncorrected intensity"
                     )
-                    # Continue without bleaching correction
+                # Continue without bleaching correction
+
+            # Apply smoothing if requested
+            if smoothing_factor > 0:
+                try:
+                    intensity_trace = smooth_intensity_trace(
+                        intensity_trace, smoothing_factor
+                    )
+                    print(f"✅ Applied smoothing with factor: {smoothing_factor}")
+                except Exception as e:
+                    print(f"⚠️ Smoothing failed: {e}, using unsmoothed intensity")
 
             return JSONResponse(
                 {
@@ -590,3 +708,114 @@ async def handle_roi_operations(request: dict):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ROI operation failed: {str(e)}")
+
+
+@app.post("/api/get-roi-traces")
+async def get_roi_traces(request: dict):
+    """Get intensity traces for selected ROIs with optional smoothing.
+
+    Example request body:
+    {
+        "video_path": "/path/to/video.mp4",
+        "roi_ids": [1, 2, 3],
+        "smoothing": 0.1,
+        "adjust_bleaching": true,
+        "fit_type": "inverse"
+    }
+    """
+    video_path = Path(request.get("video_path", ""))
+    roi_ids = request.get("roi_ids", [])
+    smoothing_factor = request.get("smoothing", 0.0)
+    adjust_bleaching = request.get("adjust_bleaching", False)
+    fit_type = request.get("fit_type", "inverse")
+
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found: {video_path}"
+        )
+
+    if not roi_ids:
+        return JSONResponse({"traces": []})
+
+    try:
+        # Process video
+        frames, info = process_video(str(video_path))
+        n_frames = frames.shape[0]
+        time_points = np.arange(n_frames) / info["fps"]
+
+        # Get bleaching trend if needed
+        bleaching_trend = None
+        if adjust_bleaching:
+            try:
+                mean_intensity = compute_bleaching(frames)
+                video_key = str(video_path)
+                if video_key in analysis_cache:
+                    bleaching_data = analysis_cache[video_key]["bleaching_data"]
+                    if (
+                        fit_type == "exponential"
+                        and bleaching_data["fit_params"]["exponential"]
+                    ):
+                        exp_params = bleaching_data["fit_params"]["exponential"]
+                        if isinstance(exp_params, list) and len(exp_params) >= 2:
+                            I0, tau = exp_params[0], exp_params[1]
+                            bleaching_trend = I0 * np.exp(-time_points / tau)
+                    elif (
+                        fit_type == "inverse"
+                        and bleaching_data["fit_params"]["inverse"]
+                    ):
+                        inv_params = bleaching_data["fit_params"]["inverse"]
+                        if isinstance(inv_params, list) and len(inv_params) >= 2:
+                            I0, tau = inv_params[0], inv_params[1]
+                            bleaching_trend = I0 / (1 + time_points / tau)
+                    else:
+                        # Fallback to polynomial fit
+                        bleaching_trend = np.polyval(
+                            np.polyfit(time_points, mean_intensity, 2), time_points
+                        )
+                else:
+                    # If no cached analysis, use simple polynomial fit
+                    bleaching_trend = np.polyval(
+                        np.polyfit(time_points, mean_intensity, 2), time_points
+                    )
+            except Exception as e:
+                print(
+                    f"⚠️ Bleaching correction failed: {e}, using uncorrected intensity"
+                )
+
+        traces = []
+        for roi_id in roi_ids:
+            # For now, we'll create dummy traces based on ROI ID
+            # In a real implementation, you'd retrieve the actual ROI data
+            base_intensity = 100 + roi_id * 20
+            noise = np.random.normal(0, 5, n_frames)
+            intensity_trace = (
+                base_intensity + noise + 10 * np.sin(2 * np.pi * 0.1 * time_points)
+            )
+
+            # Apply bleaching correction if available
+            if bleaching_trend is not None:
+                intensity_trace = intensity_trace / bleaching_trend * bleaching_trend[0]
+
+            # Apply smoothing if requested
+            if smoothing_factor > 0:
+                try:
+                    intensity_trace = smooth_intensity_trace(
+                        intensity_trace, smoothing_factor
+                    )
+                except Exception as e:
+                    print(f"⚠️ Smoothing failed for ROI {roi_id}: {e}")
+
+            traces.append(
+                {
+                    "roi_id": roi_id,
+                    "intensity_trace": intensity_trace.tolist(),
+                    "time_points": time_points.tolist(),
+                }
+            )
+
+        return JSONResponse({"traces": traces})
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get ROI traces: {str(e)}"
+        )

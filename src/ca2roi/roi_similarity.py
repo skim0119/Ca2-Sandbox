@@ -184,7 +184,7 @@ def _plot_cluster_traces(
                 mean_trace,
                 color=colors[cluster_id],
                 linewidth=2,
-                label=f"Cluster {cluster_id+1} (n={len(cluster_traces)})",
+                label=f"Cluster {cluster_id + 1} (n={len(cluster_traces)})",
             )
             ax.fill_between(
                 time_points,
@@ -219,7 +219,7 @@ def _plot_cluster_traces(
 
             ax.set_xlabel("Time (seconds)")
             ax.set_ylabel("Normalized Intensity")
-            ax.set_title(f"Cluster {cluster_id+1} Detail (n={len(cluster_traces)})")
+            ax.set_title(f"Cluster {cluster_id + 1} Detail (n={len(cluster_traces)})")
             ax.legend()
             ax.grid(True, alpha=0.3)
 
@@ -268,7 +268,7 @@ def _plot_tsne_clusters(
                 c=[colors[cluster_id]],
                 s=50,
                 alpha=0.7,
-                label=f"Cluster {cluster_id+1} (n={len(cluster_coords)})",
+                label=f"Cluster {cluster_id + 1} (n={len(cluster_coords)})",
             )
 
     plt.xlabel("t-SNE Dimension 1")
@@ -332,7 +332,7 @@ def _plot_spatial_clusters(
         ax.text(
             x0 + (x1 - x0) / 2,
             y0 + (y1 - y0) / 2,
-            f"{i+1}",
+            f"{i + 1}",
             ha="center",
             va="center",
             fontsize=8,
@@ -359,7 +359,7 @@ def _plot_spatial_clusters(
                 color="w",
                 markerfacecolor=colors[cluster_id],
                 markersize=15,
-                label=f"Cluster {cluster_id+1}: {cluster_count} ROIs ({percentage:.1f}%)",
+                label=f"Cluster {cluster_id + 1}: {cluster_count} ROIs ({percentage:.1f}%)",
             )
         )
 
@@ -428,7 +428,7 @@ def _plot_cluster_averaged_traces(rois, cluster_labels, n_clusters, clustering_d
                 mean_trace,
                 color=colors[cluster_id],
                 linewidth=3,
-                label=f"Cluster {cluster_id+1} (n={len(cluster_traces)})",
+                label=f"Cluster {cluster_id + 1} (n={len(cluster_traces)})",
             )
 
             # Plot standard deviation band
@@ -500,7 +500,9 @@ def _plot_individual_clusters(rois, cluster_labels, n_clusters, clustering_dir):
             mean_trace = np.mean(cluster_traces, axis=0)
             ax.plot(time_points, mean_trace, color="black", linewidth=3, label="Mean")
 
-            ax.set_title(f"Cluster {cluster_id+1} Detail\n({len(cluster_traces)} ROIs)")
+            ax.set_title(
+                f"Cluster {cluster_id + 1} Detail\n({len(cluster_traces)} ROIs)"
+            )
             ax.set_xlabel("Frame Number")
             ax.set_ylabel("Normalized Intensity")
             ax.legend()
@@ -515,7 +517,7 @@ def _plot_individual_clusters(rois, cluster_labels, n_clusters, clustering_dir):
                 transform=ax.transAxes,
                 fontsize=12,
             )
-            ax.set_title(f"Cluster {cluster_id+1} (Empty)")
+            ax.set_title(f"Cluster {cluster_id + 1} (Empty)")
 
     # Hide unused subplots
     for i in range(n_clusters, len(axes)):

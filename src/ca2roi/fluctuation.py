@@ -181,7 +181,7 @@ def save_auto_rois_plot(fluctuation_map, roi_data, first_frame, output_path):
 
     # Plot 1: Fluctuation map with ROI overlay
     im1 = ax1.imshow(fluctuation_map, cmap="viridis", aspect="equal")
-    ax1.set_title(f'Fluctuation Map with {roi_data["stats"]["n_rois"]} Auto ROIs')
+    ax1.set_title(f"Fluctuation Map with {roi_data['stats']['n_rois']} Auto ROIs")
     plt.colorbar(im1, ax=ax1, label="Fluctuation Intensity")
 
     # Plot 2: First frame with ROI overlay
@@ -202,7 +202,7 @@ def save_auto_rois_plot(fluctuation_map, roi_data, first_frame, output_path):
         ax1.text(
             x0,
             y0 - 2,
-            f"ROI{roi['id']+1}",
+            f"ROI{roi['id'] + 1}",
             color="red",
             fontsize=10,
             bbox=dict(boxstyle="round,pad=0.1", facecolor="white", alpha=0.8),
@@ -216,7 +216,7 @@ def save_auto_rois_plot(fluctuation_map, roi_data, first_frame, output_path):
         ax2.text(
             x0,
             y0 - 2,
-            f"ROI{roi['id']+1}",
+            f"ROI{roi['id'] + 1}",
             color="yellow",
             fontsize=10,
             bbox=dict(boxstyle="round,pad=0.1", facecolor="black", alpha=0.8),
@@ -262,7 +262,7 @@ def plot_roi_intensity_traces(roi_data, fps, normalizer, output_path):
         plt.plot(
             time_points,
             avg_intensity,
-            label=f'ROI {roi["id"]+1} ({roi["n_pixels"]} px, Fluct: {roi["fluctuation_strength"]:.2f})',
+            label=f"ROI {roi['id'] + 1} ({roi['n_pixels']} px, Fluct: {roi['fluctuation_strength']:.2f})",
             linewidth=1.5,
         )
 

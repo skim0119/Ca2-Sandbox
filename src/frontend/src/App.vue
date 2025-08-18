@@ -21,10 +21,31 @@ const firstFrameData = ref<{
 } | null>(null)
 const bleachingData = reactive({
   adjustBleaching: true,
-  smoothing: 0.5,
+  smoothing: 0.0,
   fitType: 'inverse' as 'exponential' | 'inverse',
-  analysisData: null as any,
-  analysisId: null as string | null
+  analysisData: undefined as {
+    time_points: number[]
+    mean_intensity: number[]
+    fit_params: {
+      exponential?: number[]
+      inverse?: number[]
+    }
+    r2_scores: {
+      exponential?: number
+      inverse?: number
+    }
+  } | undefined,
+  analysisId: null as string | null,
+  mainPlotData: undefined as {
+    timePoints: number[]
+    datasets: Array<{
+      label: string
+      data: number[]
+      borderColor: string
+      backgroundColor: string
+      tension: number
+    }>
+  } | undefined
 })
 
 const fetchBackendVersion = async () => {
@@ -52,10 +73,17 @@ const handleFileSelection = (files: string[]) => {
 
 const handleROISelection = (rois: number[]) => {
   selectedROIs.value = rois
+  // Update main plot when ROI selection changes
+  updateMainPlot()
 }
 
 const handleBleachingUpdate = (data: Partial<typeof bleachingData>) => {
   Object.assign(bleachingData, data)
+  
+  // Update main plot when bleaching settings change (especially smoothing)
+  if (data.smoothing !== undefined || data.adjustBleaching !== undefined || data.fitType !== undefined) {
+    updateMainPlot()
+  }
 }
 
 const handleFirstFrameReceived = (data: {
@@ -110,21 +138,75 @@ const handleRunAnalysis = async () => {
   }
 }
 
-const handleROICreated = (roi: any) => {
+interface ROI {
+  id: number
+  name: string
+  color: string
+  coords: [number, number, number, number]
+  selected: boolean
+  intensityTrace?: number[]
+  timePoints?: number[]
+}
+
+const handleROICreated = (roi: ROI) => {
   console.log('🎯 ROI created:', roi)
   // Update main plot with new ROI intensity trace
   updateMainPlot()
 }
 
-const handleROIUpdated = (roi: any) => {
+const handleROIUpdated = (roi: ROI) => {
   console.log('🔄 ROI updated:', roi)
   // Update main plot when ROI selection changes
   updateMainPlot()
 }
 
-const updateMainPlot = () => {
-  // This will be implemented to update the main plot with ROI intensity traces
-  console.log('📊 Updating main plot with ROI data')
+const updateMainPlot = async () => {
+  if (!selectedFiles.value[0] || selectedROIs.value.length === 0) {
+    console.log('📊 No video or ROIs selected for main plot update')
+    return
+  }
+
+  try {
+    console.log('📊 Updating main plot with ROI data:', selectedROIs.value)
+    
+    const response = await fetch('/api/get-roi-traces', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        video_path: selectedFiles.value[0],
+        roi_ids: selectedROIs.value,
+        smoothing: bleachingData.smoothing,
+        adjust_bleaching: bleachingData.adjustBleaching,
+        fit_type: bleachingData.fitType
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ ROI traces received:', result)
+
+    // Update the main plot data in bleachingData
+    if (result.traces && result.traces.length > 0) {
+      bleachingData.mainPlotData = {
+        timePoints: result.traces[0].time_points,
+        datasets: result.traces.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
+          label: `ROI ${trace.roi_id}`,
+          data: trace.intensity_trace,
+          borderColor: `hsl(${index * 60}, 70%, 50%)`,
+          backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
+          tension: 0.1
+        }))
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Failed to update main plot:', error)
+  }
 }
 
 const createDummyAnalysisData = () => {
@@ -178,7 +260,8 @@ const createDummyAnalysisData = () => {
             :first-frame-data="firstFrameData"
             :bleaching-settings="{
               adjustBleaching: bleachingData.adjustBleaching,
-              fitType: bleachingData.fitType
+              fitType: bleachingData.fitType,
+              smoothing: bleachingData.smoothing
             }"
             @rois-selected="handleROISelection"
             @run-analysis="handleRunAnalysis"

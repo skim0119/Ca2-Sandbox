@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -40,6 +40,16 @@ interface Props {
       }
     }
     analysisId?: string | null
+    mainPlotData?: {
+      timePoints: number[]
+      datasets: Array<{
+        label: string
+        data: number[]
+        borderColor: string
+        backgroundColor: string
+        tension: number
+      }>
+    } | undefined
   }
 }
 
@@ -167,16 +177,25 @@ const handleMouseUp = () => {
   document.removeEventListener('mouseup', handleMouseUp)
 }
 
-// Main plot data
-const mainChartData = ref({
-  labels: [] as number[],
-  datasets: [] as Array<{
-    label: string
-    data: number[]
-    borderColor: string
-    backgroundColor: string
-    tension: number
-  }>
+// Main plot data - computed from props
+const mainChartData = computed(() => {
+  if (!props.bleachingData.mainPlotData) {
+    return {
+      labels: [] as number[],
+      datasets: [] as Array<{
+        label: string
+        data: number[]
+        borderColor: string
+        backgroundColor: string
+        tension: number
+      }>
+    }
+  }
+
+  return {
+    labels: props.bleachingData.mainPlotData.timePoints || [],
+    datasets: props.bleachingData.mainPlotData.datasets || []
+  }
 })
 
 const mainChartOptions = ref({
