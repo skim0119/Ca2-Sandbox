@@ -43,6 +43,7 @@ cleanup:
 	cd src/frontend && rm -f package-lock.json 2>/dev/null || true
 	cd src/frontend && rm -rf .vite 2>/dev/null || true
 	cd src/frontend && rm -rf dist 2>/dev/null || true
+	rm -rf static
 
 	# Clean system cache
 	rm -rf .DS_Store 2>/dev/null || true

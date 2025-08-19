@@ -3,55 +3,90 @@ import numpy as np
 import base64
 from io import BytesIO
 from PIL import Image
+from dataclasses import dataclass
 
 
-def process_video(video_path):
-    cap = cv2.VideoCapture(video_path)
-    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frames = []
-    for _ in range(n_frames):
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame.ndim == 3:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frames.append(frame.astype(np.float32))
-    cap.release()
-    frames = np.stack(frames, axis=0)
-    info = {"n_frames": n_frames, "width": width, "height": height, "fps": fps}
-    return frames, info
+@dataclass
+class VideoMetadata:
+    frames: np.ndarray
+    first_frame: np.ndarray
+
+    n_frames: int
+    width: int
+    height: int
+    fps: float
+
+    def info(self):
+        return {
+            "n_frames": self.n_frames,
+            "width": self.width,
+            "height": self.height,
+            "fps": self.fps,
+        }
+
+    def get_first_frame(self):
+        return self.first_frame
+
+    @classmethod
+    def from_video_path(cls, video_path):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"Could not open video file: {video_path}")
+        n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+
+        frames = []
+        for fidx in range(n_frames):
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if fidx == 0:
+                first_frame = frame.copy()
+            if frame.ndim == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frames.append(frame.astype(np.float32))
+        cap.release()
+
+        # Handle empty video case
+        if not frames:
+            frames = np.empty((0, height, width), dtype=np.float32)
+        else:
+            frames = np.stack(frames, axis=0)
+
+        return cls(
+            frames=frames,
+            first_frame=first_frame,
+            n_frames=n_frames,
+            width=width,
+            height=height,
+            fps=fps,
+        )
 
 
-def get_first_frame(video_path):
-    """Get the first frame of a video file as a base64 encoded image.
-
-    Args:
-        video_path (str): Path to the video file
-
-    Returns:
-        tuple: (base64_image_string, video_info_dict)
+def process_video(video_path) -> VideoMetadata:
     """
-    cap = cv2.VideoCapture(video_path)
+    Load a video file and return the frames and video information.
+    """
 
-    if not cap.isOpened():
-        raise ValueError(f"Could not open video file: {video_path}")
+    meta_data = VideoMetadata.from_video_path(video_path)
+    return meta_data
 
-    # Get video properties
-    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
 
-    # Read first frame
-    ret, frame = cap.read()
-    cap.release()
+def get_first_frame(video_path) -> np.ndarray:
+    meta_data = VideoMetadata.from_video_path(video_path)
+    return meta_data.get_first_frame()
 
-    if not ret:
-        raise ValueError("Could not read first frame from video")
 
+def highlight_rois(frame, rois):
+    for roi in rois:
+        x0, y0, x1, y1 = roi
+        cv2.rectangle(frame, (x0, y0), (x1, y1), (0, 0, 255), 2)
+    return frame
+
+
+def convert_frame_to_base64(frame):
     # Convert BGR to RGB (OpenCV uses BGR, PIL uses RGB)
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -65,13 +100,4 @@ def get_first_frame(video_path):
 
     # Create data URL
     base64_image = f"data:image/png;base64,{img_str}"
-
-    # Video info
-    video_info = {
-        "width": width,
-        "height": height,
-        "fps": fps,
-        "total_frames": n_frames,
-    }
-
-    return base64_image, video_info
+    return base64_image

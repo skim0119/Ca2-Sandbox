@@ -3,10 +3,14 @@ import { ref, reactive, onMounted } from 'vue'
 import FileSelector from './components/FileSelector.vue'
 import VideoDisplay from './components/VideoDisplay.vue'
 import BleachingCorrection from './components/BleachingCorrection.vue'
+import { type ROI, useROIOperations } from './composables/useROIOperations'
 
 // Application state
 const selectedFiles = ref<string[]>([])
 const selectedROIs = ref<number[]>([]) // No ROIs selected by default
+
+// ROI operations composable to access available ROIs
+const { availableROIs } = useROIOperations()
 const backendVersion = ref<string>('...')
 const firstFrameData = ref<{
   first_frame: string;
@@ -73,17 +77,10 @@ const handleFileSelection = (files: string[]) => {
 
 const handleROISelection = (rois: number[]) => {
   selectedROIs.value = rois
-  // Update main plot when ROI selection changes
-  updateMainPlot()
 }
 
 const handleBleachingUpdate = (data: Partial<typeof bleachingData>) => {
   Object.assign(bleachingData, data)
-  
-  // Update main plot when bleaching settings change (especially smoothing)
-  if (data.smoothing !== undefined || data.adjustBleaching !== undefined || data.fitType !== undefined) {
-    updateMainPlot()
-  }
 }
 
 const handleFirstFrameReceived = (data: {
@@ -138,76 +135,42 @@ const handleRunAnalysis = async () => {
   }
 }
 
-interface ROI {
-  id: number
-  name: string
-  color: string
-  coords: [number, number, number, number]
-  selected: boolean
-  intensityTrace?: number[]
-  timePoints?: number[]
+
+
+const handleMainPlotUpdate = (mainPlotData: {
+  timePoints: number[]
+  datasets: Array<{
+    label: string
+    data: number[]
+    borderColor: string
+    backgroundColor: string
+    tension: number
+  }>
+}) => {
+  console.log('📊 Main plot updated from button:', mainPlotData)
+  bleachingData.mainPlotData = mainPlotData
 }
 
 const handleROICreated = (roi: ROI) => {
   console.log('🎯 ROI created:', roi)
-  // Update main plot with new ROI intensity trace
-  updateMainPlot()
+  // Add the new ROI to the selected ROIs list since it's created as selected: true
+  if (roi.selected && !selectedROIs.value.includes(roi.id)) {
+    selectedROIs.value.push(roi.id)
+  }
 }
 
 const handleROIUpdated = (roi: ROI) => {
   console.log('🔄 ROI updated:', roi)
-  // Update main plot when ROI selection changes
-  updateMainPlot()
-}
-
-const updateMainPlot = async () => {
-  if (!selectedFiles.value[0] || selectedROIs.value.length === 0) {
-    console.log('📊 No video or ROIs selected for main plot update')
-    return
-  }
-
-  try {
-    console.log('📊 Updating main plot with ROI data:', selectedROIs.value)
-    
-    const response = await fetch('/api/get-roi-traces', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        video_path: selectedFiles.value[0],
-        roi_ids: selectedROIs.value,
-        smoothing: bleachingData.smoothing,
-        adjust_bleaching: bleachingData.adjustBleaching,
-        fit_type: bleachingData.fitType
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('✅ ROI traces received:', result)
-
-    // Update the main plot data in bleachingData
-    if (result.traces && result.traces.length > 0) {
-      bleachingData.mainPlotData = {
-        timePoints: result.traces[0].time_points,
-        datasets: result.traces.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
-          label: `ROI ${trace.roi_id}`,
-          data: trace.intensity_trace,
-          borderColor: `hsl(${index * 60}, 70%, 50%)`,
-          backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
-          tension: 0.1
-        }))
-      }
-    }
-
-  } catch (error) {
-    console.error('❌ Failed to update main plot:', error)
+  // Update the selected ROIs list based on the ROI's selected state
+  const index = selectedROIs.value.indexOf(roi.id)
+  if (roi.selected && index === -1) {
+    selectedROIs.value.push(roi.id)
+  } else if (!roi.selected && index !== -1) {
+    selectedROIs.value.splice(index, 1)
   }
 }
+
+
 
 const createDummyAnalysisData = () => {
   // Create dummy bleaching data for debugging
@@ -274,7 +237,11 @@ const createDummyAnalysisData = () => {
       <div class="column bleaching-correction">
         <BleachingCorrection
           :bleaching-data="bleachingData"
+          :selected-files="selectedFiles"
+          :selected-r-o-is="selectedROIs"
+          :available-r-o-is="availableROIs"
           @bleaching-updated="handleBleachingUpdate"
+          @main-plot-updated="handleMainPlotUpdate"
         />
       </div>
     </main>

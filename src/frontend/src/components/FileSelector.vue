@@ -105,11 +105,11 @@ const handleFileToggle = async (filename: string) => {
 }
 
 const sendVideoToBackend = async (videoPath: string) => {
-  console.log('🔍 Attempting to access video at path:', videoPath)
+  console.log('Attempting to access video at path:', videoPath)
 
   try {
-    console.log('📡 Making API call to /api/first-frame...')
-    const response = await fetch('/api/first-frame', {
+    console.log('Making API call to /api/initiate-analysis...')
+    const response = await fetch('/api/initiate-analysis', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -152,7 +152,7 @@ const createDummyFrameData = (videoPath: string) => {
         Video Path: ${videoPath}
       </text>
       <text x="50%" y="75%" text-anchor="middle" fill="#f39c12" font-family="Arial" font-size="10">
-        API Call: POST /api/first-frame
+        API Call: POST /api/initiate-analysis
       </text>
       <text x="50%" y="85%" text-anchor="middle" fill="#95a5a6" font-family="Arial" font-size="8">
         Check console for debugging info

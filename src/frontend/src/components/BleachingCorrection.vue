@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
+import { type ROI } from '../composables/useROIOperations'
 
 ChartJS.register(
   CategoryScale,
@@ -51,10 +52,23 @@ interface Props {
       }>
     } | undefined
   }
+  selectedFiles: string[]
+  selectedROIs: number[]
+  availableROIs: ROI[]
 }
 
 interface Emits {
   (e: 'bleaching-updated', data: Partial<Props['bleachingData']>): void
+  (e: 'main-plot-updated', data: {
+    timePoints: number[]
+    datasets: Array<{
+      label: string
+      data: number[]
+      borderColor: string
+      backgroundColor: string
+      tension: number
+    }>
+  }): void
 }
 
 const props = defineProps<Props>()
@@ -149,32 +163,60 @@ const bleachingChartOptions = ref({
   }
 })
 
-// Resizable plot functionality
+// Resizable bleaching plot functionality
 const bleachingPlotHeight = ref(400) // Default height (2x the original ~200px)
-const isResizing = ref(false)
-const startY = ref(0)
-const startHeight = ref(0)
+const isBleachingResizing = ref(false)
+const bleachingStartY = ref(0)
+const bleachingStartHeight = ref(0)
 
-const handleMouseDown = (event: MouseEvent) => {
-  isResizing.value = true
-  startY.value = event.clientY
-  startHeight.value = bleachingPlotHeight.value
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
+const handleBleachingMouseDown = (event: MouseEvent) => {
+  isBleachingResizing.value = true
+  bleachingStartY.value = event.clientY
+  bleachingStartHeight.value = bleachingPlotHeight.value
+  document.addEventListener('mousemove', handleBleachingMouseMove)
+  document.addEventListener('mouseup', handleBleachingMouseUp)
 }
 
-const handleMouseMove = (event: MouseEvent) => {
-  if (!isResizing.value) return
+const handleBleachingMouseMove = (event: MouseEvent) => {
+  if (!isBleachingResizing.value) return
 
-  const deltaY = event.clientY - startY.value
-  const newHeight = Math.max(200, Math.min(800, startHeight.value + deltaY)) // Min 200px, max 800px
+  const deltaY = event.clientY - bleachingStartY.value
+  const newHeight = Math.max(200, Math.min(800, bleachingStartHeight.value + deltaY)) // Min 200px, max 800px
   bleachingPlotHeight.value = newHeight
 }
 
-const handleMouseUp = () => {
-  isResizing.value = false
-  document.removeEventListener('mousemove', handleMouseMove)
-  document.removeEventListener('mouseup', handleMouseUp)
+const handleBleachingMouseUp = () => {
+  isBleachingResizing.value = false
+  document.removeEventListener('mousemove', handleBleachingMouseMove)
+  document.removeEventListener('mouseup', handleBleachingMouseUp)
+}
+
+// Resizable main plot functionality
+const mainPlotHeight = ref(400) // Default height for main plot
+const isMainResizing = ref(false)
+const mainStartY = ref(0)
+const mainStartHeight = ref(0)
+
+const handleMainMouseDown = (event: MouseEvent) => {
+  isMainResizing.value = true
+  mainStartY.value = event.clientY
+  mainStartHeight.value = mainPlotHeight.value
+  document.addEventListener('mousemove', handleMainMouseMove)
+  document.addEventListener('mouseup', handleMainMouseUp)
+}
+
+const handleMainMouseMove = (event: MouseEvent) => {
+  if (!isMainResizing.value) return
+
+  const deltaY = event.clientY - mainStartY.value
+  const newHeight = Math.max(200, Math.min(800, mainStartHeight.value + deltaY)) // Min 200px, max 800px
+  mainPlotHeight.value = newHeight
+}
+
+const handleMainMouseUp = () => {
+  isMainResizing.value = false
+  document.removeEventListener('mousemove', handleMainMouseMove)
+  document.removeEventListener('mouseup', handleMainMouseUp)
 }
 
 // Main plot data - computed from props
@@ -249,6 +291,62 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
   }
 }
 
+const handleGetROITraces = async () => {
+  if (!props.selectedFiles[0] || props.selectedROIs.length === 0) {
+    console.log('📊 No video or ROIs selected for ROI traces')
+    return
+  }
+
+  try {
+    console.log('📊 Fetching ROI traces for:', props.selectedROIs)
+
+    // Filter available ROIs to get the selected ones with full data
+    const selectedROIObjects = props.availableROIs.filter(roi =>
+      props.selectedROIs.includes(roi.id)
+    )
+
+    const response = await fetch('/api/get-roi-traces', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        rois: selectedROIObjects.map(roi => ({
+          id: roi.id,
+          coords: roi.coords
+        })),
+        smoothing: props.bleachingData.smoothing
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ ROI traces received:', result)
+
+    // Update the main plot data
+    if (result.traces && result.traces.length > 0) {
+      const mainPlotData = {
+        timePoints: result.traces[0].time_points,
+        datasets: result.traces.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
+          label: `ROI ${trace.roi_id}`,
+          data: trace.intensity_trace,
+          borderColor: `hsl(${index * 60}, 70%, 50%)`,
+          backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
+          tension: 0.1
+        }))
+      }
+
+      emit('main-plot-updated', mainPlotData)
+    }
+
+  } catch (error) {
+    console.error('❌ Failed to fetch ROI traces:', error)
+  }
+}
+
 const handleAdjustBleachingChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   emit('bleaching-updated', { adjustBleaching: target.checked })
@@ -285,8 +383,8 @@ const handleSaveToCSV = () => {
         />
         <div
           class="resize-handle"
-          @mousedown="handleMouseDown"
-          :class="{ 'resizing': isResizing }"
+          @mousedown="handleBleachingMouseDown"
+          :class="{ 'resizing': isBleachingResizing }"
         >
           <div class="resize-indicator">⋮⋮</div>
         </div>
@@ -350,11 +448,21 @@ const handleSaveToCSV = () => {
 
     <!-- Main Plot -->
     <div class="main-plot-section">
-      <h3>Main Plot</h3>
-      <div class="plot-container">
+      <div class="main-plot-header">
+        <h3>Main Plot</h3>
+        <button
+          @click="handleGetROITraces"
+          class="get-traces-btn"
+          :disabled="!props.selectedFiles[0] || props.selectedROIs.length === 0"
+          title="Fetch ROI intensity traces from the backend"
+        >
+          Get ROI Traces
+        </button>
+      </div>
+      <div class="plot-container" :style="{ height: mainPlotHeight + 'px' }">
         <div v-if="mainChartData.datasets.length === 0" class="empty-state">
           <div class="empty-message">No plot data available</div>
-          <div class="empty-hint">Run analysis to see intensity traces</div>
+          <div class="empty-hint">Click 'Get ROI Traces' to see intensity traces</div>
         </div>
         <Line
           v-else
@@ -362,6 +470,13 @@ const handleSaveToCSV = () => {
           :options="mainChartOptions"
           class="main-chart"
         />
+        <div
+          class="resize-handle"
+          @mousedown="handleMainMouseDown"
+          :class="{ 'resizing': isMainResizing }"
+        >
+          <div class="resize-indicator">⋮⋮</div>
+        </div>
       </div>
     </div>
   </div>
@@ -379,6 +494,36 @@ const handleSaveToCSV = () => {
   margin: 0 0 0.5rem 0;
   color: #2c3e50;
   font-size: 1.1rem;
+}
+
+.main-plot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.get-traces-btn {
+  padding: 0.5rem 1rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.get-traces-btn:hover:not(:disabled) {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+}
+
+.get-traces-btn:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .bleaching-plot-section {

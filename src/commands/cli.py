@@ -79,7 +79,9 @@ def main(
     bleach_csv_path = os.path.join(workspace, f"bleaching_trend.csv")
     overlay_img_path = os.path.join(workspace, f"fluctuation_overlay.pdf")
 
-    frames, info = process_video(video_path)
+    meta_data = process_video(video_path)
+    frames = meta_data.frames
+    info = meta_data.info()
     mean_intensity = compute_bleaching(frames)
     save_bleaching(mean_intensity, info, bleach_pkl_path)
     save_bleaching_trend_csv(mean_intensity, info["fps"], bleach_csv_path)
