@@ -21,6 +21,7 @@ dependencies = [
     "scipy",
     "fastapi",
     "uvicorn[standard]",
+    "python-multipart>=0.0.20",
 ]
 
 [project.scripts]
