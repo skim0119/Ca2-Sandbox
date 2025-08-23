@@ -28,7 +28,7 @@ class VideoMetadata:
         return self.first_frame
 
     @classmethod
-    def from_video_path(cls, video_path):
+    def from_video_path(cls, video_path, meta_data_only:bool = False, verbose:bool = False):
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise ValueError(f"Could not open video file: {video_path}")
@@ -37,23 +37,26 @@ class VideoMetadata:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
 
-        frames = []
-        for fidx in range(n_frames):
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if fidx == 0:
-                first_frame = frame.copy()
-            if frame.ndim == 3:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frames.append(frame.astype(np.float32))
-        cap.release()
-
-        # Handle empty video case
-        if not frames:
+        if meta_data_only:
+            ret, first_frame = cap.read()
             frames = np.empty((0, height, width), dtype=np.float32)
         else:
-            frames = np.stack(frames, axis=0)
+            frames_list = []
+            for fidx in range(n_frames):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if fidx == 0:
+                    first_frame = frame.copy()
+                if frame.ndim == 3:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frames_list.append(frame.astype(np.float32))
+            frames = np.stack(frames_list, axis=0)
+            
+        cap.release()
+
+        if verbose:
+            print(f"Video metadata: {cls(frames=frames, first_frame=first_frame, n_frames=n_frames, width=width, height=height, fps=fps)}")
 
         return cls(
             frames=frames,
@@ -65,12 +68,22 @@ class VideoMetadata:
         )
 
 
-def process_video(video_path) -> VideoMetadata:
+def process_video(video_path, verbose:bool = False) -> VideoMetadata:
     """
     Load a video file and return the frames and video information.
     """
 
-    meta_data = VideoMetadata.from_video_path(video_path)
+    meta_data = VideoMetadata.from_video_path(video_path, verbose=verbose)
+    return meta_data
+
+
+def process_video_metadata_only(video_path) -> VideoMetadata:
+    """
+    Load only video metadata and first frame (for upload endpoint).
+    This is much faster as it doesn't load all frames into memory.
+    """
+
+    meta_data = VideoMetadata.from_video_path(video_path, meta_data_only=True)
     return meta_data
 
 

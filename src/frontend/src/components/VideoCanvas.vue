@@ -1,18 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import type { FirstFrameData } from '../types'
 
 interface Props {
-  firstFrameData?: {
-    first_frame: string;
-    video_info: {
-      width: number;
-      height: number;
-      fps: number;
-      total_frames: number;
-      debug_mode?: boolean;
-      original_path?: string;
-    }
-  } | null
+  firstFrameData?: FirstFrameData | null
   availableROIs: Array<{
     id: number
     name: string

@@ -1,19 +1,13 @@
 <script setup lang="ts">
+import type { AutoROIConfig } from '../types'
+
 interface Props {
-  config: {
-    thresholdPercentage: number
-    minDistancePercentage: number
-    nClusters: number
-  }
+  config: AutoROIConfig
   isRunning: boolean
 }
 
 interface Emits {
-  (e: 'config-updated', config: {
-    thresholdPercentage: number
-    minDistancePercentage: number
-    nClusters: number
-  }): void
+  (e: 'config-updated', config: AutoROIConfig): void
   (e: 'run-auto-roi'): void
 }
 
