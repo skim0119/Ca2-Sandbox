@@ -93,7 +93,6 @@ def create_app():
 app = create_app()
 
 # Global cache for analysis results
-analysis_cache: dict[str, dict] = {}
 current_video_data: VideoMetadata | None = None
 
 
@@ -298,7 +297,6 @@ async def run_bleaching_analysis(request: dict):
 
     Example response:
     {
-        "analysis_id": "analysis_abc123",
         "status": "completed",
         "bleaching_data": {
             "time_points": [0.0, 0.033, 0.067, ...],
@@ -314,21 +312,16 @@ async def run_bleaching_analysis(request: dict):
         }
     }
     """
-    global analysis_cache
     assert_video_selected()
 
     try:
-        # Cache
-        video_path = Path(request.get("video_path", ""))
-        video_key = video_path.as_posix()
-        if video_key in analysis_cache:
-            print(f"Using cached analysis for: {video_path}")
-            return JSONResponse(analysis_cache[video_key])
-
         # Process video and compute bleaching
         meta_data = current_video_data
         frames = meta_data.frames
         mean_intensity = compute_bleaching(frames)
+
+        print("Analysis bleaching:")
+        print("video info: ", meta_data.info())
 
         # Create time points
         time_points = np.arange(len(mean_intensity)) / meta_data.fps
@@ -376,9 +369,7 @@ async def run_bleaching_analysis(request: dict):
             r2_scores["inverse"] = None
 
         # Create analysis result
-        analysis_id = f"analysis_{hash(video_key) % 1000000}"
         result = {
-            "analysis_id": analysis_id,
             "status": "completed",
             "bleaching_data": {
                 "time_points": time_points.tolist(),
@@ -394,9 +385,6 @@ async def run_bleaching_analysis(request: dict):
             },
         }
 
-        # Cache the result
-        analysis_cache[video_key] = result
-
         return JSONResponse(result)
 
     except Exception as e:
@@ -409,11 +397,9 @@ async def update_fit_preference(request: dict):
 
     Example request body:
     {
-        "analysis_id": "analysis_abc123",
         "fit_type": "exponential"  # or "inverse"
     }
     """
-    analysis_id = request.get("analysis_id")
     fit_type = request.get("fit_type")
 
     if fit_type not in ["exponential", "inverse"]:
@@ -421,10 +407,8 @@ async def update_fit_preference(request: dict):
 
     # In a real implementation, you might save this to a database
     # For now, we'll just log it
-    print(f"User preference updated: {analysis_id} -> {fit_type}")
-
     return JSONResponse(
-        {"status": "updated", "analysis_id": analysis_id, "fit_type": fit_type}
+        {"status": "updated", "fit_type": fit_type}
     )
 
 

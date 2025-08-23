@@ -18,7 +18,7 @@ interface Emits {
       debug_mode?: boolean;
       original_path?: string;
     }
-  }): void
+  } | null): void
 }
 
 const props = defineProps<Props>()
@@ -54,8 +54,13 @@ const handleFileSelect = () => {
       // Filter to only include video files
       const videoFiles = files.filter(file => isVideoFile(file.name))
       
-      fileList.value = videoFiles.map(file => file.name)
-      uploadedFiles.value = videoFiles
+      // Add new files to existing lists (avoid duplicates)
+      videoFiles.forEach(file => {
+        if (!fileList.value.includes(file.name)) {
+          fileList.value.push(file.name)
+          uploadedFiles.value.push(file)
+        }
+      })
 
       console.log('Files selected:', videoFiles.map(f => ({ name: f.name, size: f.size, type: f.type })))
     }
@@ -103,6 +108,51 @@ const handleFileToggle = async (filename: string) => {
   } else {
     selectedVideoPath.value = ''
   }
+}
+
+const handleRemoveFile = (filename: string, event: Event) => {
+  event.stopPropagation() // Prevent triggering the file toggle
+  
+  console.log('Removing file:', filename)
+  
+  // Remove from file list
+  const fileIndex = fileList.value.indexOf(filename)
+  if (fileIndex > -1) {
+    fileList.value.splice(fileIndex, 1)
+  }
+  
+  // Remove from uploaded files
+  const uploadedIndex = uploadedFiles.value.findIndex(f => f.name === filename)
+  if (uploadedIndex > -1) {
+    uploadedFiles.value.splice(uploadedIndex, 1)
+  }
+  
+  // Remove from selected files if it was selected
+  const currentSelection = [...props.selectedFiles]
+  const selectedIndex = currentSelection.indexOf(filename)
+  if (selectedIndex > -1) {
+    currentSelection.splice(selectedIndex, 1)
+    emit('files-selected', currentSelection)
+    
+    // If no files are selected anymore, clear the video
+    if (currentSelection.length === 0) {
+      selectedVideoPath.value = ''
+      emit('first-frame-received', null)
+    }
+  }
+}
+
+const handleClearAll = () => {
+  console.log('Clearing all files')
+  
+  // Clear all arrays
+  fileList.value = []
+  uploadedFiles.value = []
+  
+  // Clear selections
+  emit('files-selected', [])
+  selectedVideoPath.value = ''
+  emit('first-frame-received', null)
 }
 
 const uploadAndProcessVideo = async (file: File) => {
@@ -184,6 +234,14 @@ const createDummyFrameData = (videoPath: string) => {
     <div class="file-list-section">
       <div class="file-list-header">
         <h4>Video files</h4>
+        <button
+          v-if="fileList.length > 0"
+          @click="handleClearAll"
+          class="clear-all-btn"
+          title="Remove all files"
+        >
+          Clear All
+        </button>
       </div>
 
       <div class="file-list">
@@ -204,6 +262,13 @@ const createDummyFrameData = (videoPath: string) => {
             class="file-checkbox"
           />
           <span class="file-name">{{ filename }}</span>
+          <button
+            @click="handleRemoveFile(filename, $event)"
+            class="remove-file-btn"
+            title="Remove file"
+          >
+            ×
+          </button>
         </div>
       </div>
 
@@ -321,6 +386,21 @@ const createDummyFrameData = (videoPath: string) => {
   background-color: #d5dbdb;
 }
 
+.clear-all-btn {
+  padding: 0.25rem 0.5rem;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: background-color 0.2s;
+}
+
+.clear-all-btn:hover {
+  background-color: #c0392b;
+}
+
 .file-list {
   flex: 1;
   border: 1px solid #ddd;
@@ -367,6 +447,25 @@ const createDummyFrameData = (videoPath: string) => {
   color: #333;
   flex: 1;
   word-break: break-all;
+}
+
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+  line-height: 1;
+}
+
+.remove-file-btn:hover {
+  background-color: #e74c3c;
+  color: white;
 }
 
 .file-legend {

@@ -5,6 +5,8 @@ from io import BytesIO
 from PIL import Image
 from dataclasses import dataclass
 
+from tqdm import tqdm
+
 
 @dataclass
 class VideoMetadata:
@@ -37,13 +39,16 @@ class VideoMetadata:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
 
+        print(f"Loading video: {video_path} with {n_frames} frames")
+
         if meta_data_only:
             ret, first_frame = cap.read()
             frames = np.empty((0, height, width), dtype=np.float32)
         else:
             frames_list = []
-            for fidx in range(n_frames):
+            for fidx in tqdm(range(n_frames)):
                 ret, frame = cap.read()
+                print(f"{frame.shape=}")
                 if not ret:
                     break
                 if fidx == 0:

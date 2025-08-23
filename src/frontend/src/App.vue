@@ -45,7 +45,7 @@ const handleBleachingUpdate = (data: Partial<typeof bleachingData>) => {
   Object.assign(bleachingData, data)
 }
 
-const handleFirstFrameReceived = (data: FirstFrameData) => {
+const handleFirstFrameReceived = (data: FirstFrameData | null) => {
   firstFrameData.value = data
 }
 
