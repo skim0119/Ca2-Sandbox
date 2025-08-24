@@ -90,7 +90,7 @@ export function useBackendApi() {
  }
 
   const getROITraces = async (rois: Array<{ id: number; coords: Coords }>, smoothing: number): Promise<
-    Array<{ roi_id: number; intensity_trace: number[]}>
+    Array<{ roiId: number; intensityTrace: number[]; timePoints: number[] }>
   > => {
     console.log('📊 Fetching ROI traces for:', rois.map(r => r.id))
     const response = await fetch('/api/get-roi-traces', {
@@ -110,7 +110,7 @@ export function useBackendApi() {
 
     const result = await response.json()
     console.log('✅ ROI traces received:', result)
-    return result
+    return result.traces as Array<{ roiId: number; intensityTrace: number[]; timePoints: number[] }>
   }
 
   const updateFitPreference = async (analysisId: string, fitType: 'exponential' | 'inverse'): Promise<void> => {

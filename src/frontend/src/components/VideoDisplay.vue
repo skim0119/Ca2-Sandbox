@@ -4,7 +4,7 @@ import VideoCanvas from './VideoCanvas.vue'
 import ROIList from './ROIList.vue'
 import AutoROIConfig from './AutoROIConfig.vue'
 import { useROIOperations } from '../composables/useROIOperations'
-import type { ROI, AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings, Coords } from '../types'
+import type { AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings, Coords } from '../types'
 
 interface Props {
   selectedFiles: string[]
@@ -108,9 +108,6 @@ watch(() => props.selectedFiles, (files) => {
 
       <div class="video-info">
         <span class="video-name">{{ currentVideo || 'No file selected' }}</span>
-        <div v-if="props.firstFrameData?.videoInfo.debugMode" class="debug-indicator">
-          🔧 Debug Mode - Backend Not Available
-        </div>
       </div>
     </div>
 

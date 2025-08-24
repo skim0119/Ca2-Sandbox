@@ -40,7 +40,7 @@ export function useROIOperations() {
         color: roiColor,
         coords: coords,
         selected: true,
-        intensityTrace: result[0].intensity_trace,
+        intensityTrace: result[0].intensityTrace,
       }
 
       availableROIs.value.push(newROI)

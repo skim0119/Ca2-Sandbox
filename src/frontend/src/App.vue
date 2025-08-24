@@ -45,6 +45,7 @@ const handleBleachingUpdate = (data: Partial<typeof bleachingData>) => {
 }
 
 const handleFirstFrameReceived = (data: FirstFrameData | null) => {
+  console.log('First frame received:', data)
   firstFrameData.value = data
 }
 

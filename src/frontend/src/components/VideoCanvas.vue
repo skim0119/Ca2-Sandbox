@@ -29,15 +29,22 @@ const currentDrawing = ref<{ x0: number; y0: number; x1: number; y1: number } | 
 
 // Watch for first frame data from backend
 watch(() => props.firstFrameData, (data) => {
-  if (data && data.firstFrame) {
-    videoFrame.value = data.firstFrame
-    console.log('📺 Received first frame from backend:', data.videoInfo)
+  console.log('Canvas:: First frame data received:', data)
+  if (data?.firstFrame) {
+    // Validate base64 data
+    const isValidBase64 = data.firstFrame.startsWith('data:image/') &&
+                         data.firstFrame.includes('base64,')
 
-    // Log additional debug info if in debug mode
-    if (data.videoInfo.debugMode) {
-      console.log('🔧 Debug mode detected - showing dummy frame')
-      console.log('📁 Original video path:', data.videoInfo.originalPath)
+    if (isValidBase64) {
+      videoFrame.value = data.firstFrame
+      console.log('Canvas:: Valid base64 image data set')
+    } else {
+      console.error('Canvas:: Invalid base64 data format:', data.firstFrame.substring(0, 50))
     }
+  }
+  else {
+    videoFrame.value = ''
+    console.error('Canvas:: Error: something went wrong, first frame is not received.')
   }
 }, { immediate: true })
 
@@ -125,7 +132,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="video-container">
+  <div class="video-container" style="height: 400px;">
     <div v-if="videoFrame" class="video-frame">
       <div
         class="drawing-canvas"

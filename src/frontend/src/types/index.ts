@@ -19,7 +19,6 @@ export interface VideoInfo {
   height: number
   fps: number
   totalFrames: number
-  debugMode?: boolean
   originalPath?: string
 }
 

@@ -72,7 +72,7 @@ const handleFileToggle = async (filename: string) => {
     // If clicking on already selected file, deselect it
     currentSelection.splice(index, 1)
     selectedVideoPath.value = ''
-    emit('first-frame-received', null)
+    console.error('Error: something went wrong, file not selected.')
   } else {
     // If selecting a new file, clear previous selection and select only this one
     currentSelection.length = 0 // Clear the array
@@ -87,7 +87,7 @@ const handleFileToggle = async (filename: string) => {
         console.log('Found file object:', file.name, file.size, file.type)
         const result = await uploadAndProcessVideo(file)
         // Emit the first frame data to parent component
-        emit('first-frame-received', result || null)
+        emit('first-frame-received', result)
       } else {
         console.error('File object not found for filename:', filename)
       }
@@ -153,6 +153,7 @@ const uploadAndProcessVideo = async (file: File) => {
     return result
   } catch (error) {
     console.error('Error uploading video to backend:', error)
+    return null
   }
 }
 

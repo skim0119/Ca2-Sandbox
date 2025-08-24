@@ -173,16 +173,16 @@ const updateROITraces = async () => {
 
     // Replace intensity trace in ROIs
     selectedROIObjects.forEach((roi) => {
-      roi.intensityTrace = result.find(r => r.roi_id === roi.id)?.intensity_trace
+      roi.intensityTrace = result.find(r => r.roiId === roi.id)?.intensityTrace
     })
 
     // Update the main plot data
     if (result && result.length > 0) {
       const mainPlotData = {
         timePoints: props.bleachingData.analysisData?.timePoints || [],
-        datasets: result.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
-          label: `ROI ${trace.roi_id}`,
-          data: trace.intensity_trace,
+        datasets: result.map((trace: { roiId: number; intensityTrace: number[] }, index: number) => ({
+          label: `ROI ${trace.roiId}`,
+          data: trace.intensityTrace,
           borderColor: `hsl(${index * 60}, 70%, 50%)`,
           backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
           tension: 0.1
