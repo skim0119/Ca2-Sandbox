@@ -3,6 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import FileSelector from './components/FileSelector.vue'
 import VideoDisplay from './components/VideoDisplay.vue'
 import BleachingCorrection from './components/BleachingCorrection.vue'
+import IntensityTracingPlot from './components/IntensityTracingPlot.vue'
 import { useROIOperations } from './composables/useROIOperations'
 import { useBackendApi } from './composables/useBackendApi'
 import type { BleachingData, FirstFrameData } from './types'
@@ -111,7 +112,7 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
           />
         </div>
 
-      <!-- Right Column: Bleaching Correction and Plotting -->
+      <!-- Right Column: Bleaching Correction -->
       <div class="column bleaching-correction">
         <BleachingCorrection
           :bleaching-data="bleachingData"
@@ -121,6 +122,11 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
           @bleaching-updated="handleBleachingUpdate"
           @main-plot-updated="handleMainPlotUpdate"
         />
+      </div>
+
+      <!-- Fourth Column: Intensity Tracing Plot -->
+      <div class="column intensity-tracing-plot">
+        <IntensityTracingPlot :main-plot-data="bleachingData.mainPlotData || null" />
       </div>
     </main>
   </div>
@@ -178,6 +184,12 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
   flex: 0 0 350px;
 }
 
+.intensity-tracing-plot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 @media (max-width: 1200px) {
   .app-main {
     flex-direction: column;
@@ -185,7 +197,8 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
   }
 
   .file-selection,
-  .bleaching-correction {
+  .bleaching-correction,
+  .intensity-tracing-plot {
     flex: none;
   }
 }

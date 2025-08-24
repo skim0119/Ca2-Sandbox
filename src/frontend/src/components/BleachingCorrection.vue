@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -104,33 +104,8 @@ watch(() => props.bleachingData.analysisData, (data) => {
   }
 }, { immediate: true })
 
-// Use the resizable composable for both plots
+// Use the resizable composable for bleaching plot
 const { height: bleachingPlotHeight, isResizing: isBleachingResizing, handleMouseDown: handleBleachingMouseDown } = useResizable(400, 200, 800)
-const { height: mainPlotHeight, isResizing: isMainResizing, handleMouseDown: handleMainMouseDown } = useResizable(400, 200, 800)
-
-// Main plot data - computed from props
-const mainChartData = computed(() => {
-  if (!props.bleachingData.mainPlotData) {
-    return {
-      labels: [] as number[],
-      datasets: [] as Array<{
-        label: string
-        data: number[]
-        borderColor: string
-        backgroundColor: string
-        tension: number
-      }>
-    }
-  }
-
-  return {
-    labels: props.bleachingData.mainPlotData.timePoints || [],
-    datasets: props.bleachingData.mainPlotData.datasets || []
-  }
-})
-
-// Use the chart config composable for main chart
-const { chartOptions: mainChartOptions } = useChartConfig()
 
 const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
   emit('bleaching-updated', { fitType: type })
@@ -146,56 +121,7 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
   }
 }
 
-const updateROITraces = async () => {
-  if (!props.selectedFiles[0] || props.selectedROIs.length === 0) {
-    console.log('📊 No video or ROIs selected for ROI traces')
-    return
-  }
 
-  try {
-    console.log('📊 Available ROIs:', props.availableROIs)
-    console.log('📊 Fetching ROI traces for:', props.selectedROIs)
-
-    // Filter available ROIs to get the selected ones with full data
-    const selectedROIObjects = props.availableROIs.filter(roi =>
-      props.selectedROIs.includes(roi.id)
-    )
-    console.log('📊 Selected ROIs:', selectedROIObjects)
-
-    const { getROITraces } = useBackendApi()
-    const result = await getROITraces(
-      selectedROIObjects.map(roi => ({
-        id: roi.id,
-        coords: roi.coords
-      })),
-      props.bleachingData.smoothing
-    )
-
-    // Replace intensity trace in ROIs
-    selectedROIObjects.forEach((roi) => {
-      roi.intensityTrace = result.find(r => r.roiId === roi.id)?.intensityTrace
-    })
-
-    // Update the main plot data
-    if (result && result.length > 0) {
-      const mainPlotData = {
-        timePoints: props.bleachingData.analysisData?.timePoints || [],
-        datasets: result.map((trace: { roiId: number; intensityTrace: number[] }, index: number) => ({
-          label: `ROI ${trace.roiId}`,
-          data: trace.intensityTrace,
-          borderColor: `hsl(${index * 60}, 70%, 50%)`,
-          backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
-          tension: 0.1
-        }))
-      }
-
-      emit('main-plot-updated', mainPlotData)
-    }
-
-  } catch (error) {
-    console.error('❌ Failed to fetch ROI traces:', error)
-  }
-}
 
 const handleAdjustBleachingChange = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -296,31 +222,6 @@ const handleSaveToCSV = () => {
       </div>
     </div>
 
-    <!-- Main Plot -->
-    <div class="main-plot-section">
-      <div class="main-plot-header">
-        <h3>Main Plot</h3>
-      </div>
-      <div class="plot-container" :style="{ height: mainPlotHeight + 'px' }">
-        <div v-if="mainChartData.datasets.length === 0" class="empty-state">
-          <div class="empty-message">No plot data available</div>
-          <div class="empty-hint">Click 'Get ROI Traces' to see intensity traces</div>
-        </div>
-        <Line
-          v-else
-          :data="mainChartData"
-          :options="mainChartOptions"
-          class="main-chart"
-        />
-        <div
-          class="resize-handle"
-          @mousedown="handleMainMouseDown"
-          :class="{ 'resizing': isMainResizing }"
-        >
-          <div class="resize-indicator">⋮⋮</div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -330,6 +231,7 @@ const handleSaveToCSV = () => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
 }
 
 .bleaching-correction h3 {
@@ -338,12 +240,7 @@ const handleSaveToCSV = () => {
   font-size: 1.1rem;
 }
 
-.main-plot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
+
 
 .get-traces-btn {
   padding: 0.5rem 1rem;
@@ -530,15 +427,7 @@ const handleSaveToCSV = () => {
   background-color: #229954;
 }
 
-.main-plot-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
 
-.main-chart {
-  height: 100% !important;
-}
 
 .empty-state {
   display: flex;
