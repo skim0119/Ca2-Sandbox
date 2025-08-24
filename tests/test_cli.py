@@ -12,7 +12,7 @@ def cli_runner():
     return CliRunner()
 
 
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -28,7 +28,7 @@ def test_main_command_default_workspace(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     cli_runner,
     temp_dir,
 ):
@@ -36,7 +36,7 @@ def test_main_command_default_workspace(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -59,7 +59,7 @@ def test_main_command_default_workspace(
 
     # Verify all functions were called
     mock_ensure_workspace.assert_called_once_with("result")
-    mock_process_video.assert_called_once_with(video_path)
+    mock_load_video_from_path.assert_called_once_with(video_path)
     mock_compute_bleaching.assert_called_once_with(mock_frames)
     mock_save_bleaching.assert_called_once()
     mock_compute_fluct.assert_called_once_with(mock_frames, mock_mean_intensity)
@@ -68,7 +68,7 @@ def test_main_command_default_workspace(
     mock_extract_traces.assert_called_once_with(mock_frames, mock_rois, ANY)
 
 
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -84,7 +84,7 @@ def test_main_command_custom_workspace(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     cli_runner,
     temp_dir,
 ):
@@ -92,7 +92,7 @@ def test_main_command_custom_workspace(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -125,7 +125,7 @@ def test_main_command_nonexistent_video(cli_runner):
     assert "does not exist" in result.output or "No such file" in result.output
 
 
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -141,7 +141,7 @@ def test_main_command_file_paths(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     cli_runner,
     temp_dir,
 ):
@@ -149,7 +149,7 @@ def test_main_command_file_paths(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -196,7 +196,7 @@ def test_main_command_file_paths(
 @patch("ca2roi.cli.plot_roi_intensity_traces")
 @patch("ca2roi.cli.save_auto_rois_json")
 @patch("ca2roi.cli.extract_and_save_traces")
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -208,7 +208,7 @@ def test_main_command_auto_roi_with_params(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     mock_extract_traces,
     mock_save_auto_json,
     mock_plot_traces,
@@ -221,7 +221,7 @@ def test_main_command_auto_roi_with_params(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -271,7 +271,7 @@ def test_main_command_auto_roi_with_params(
 @patch("ca2roi.cli.plot_roi_intensity_traces")
 @patch("ca2roi.cli.save_auto_rois_json")
 @patch("ca2roi.cli.extract_and_save_traces")
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -287,7 +287,7 @@ def test_main_command_auto_roi_interactive(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     mock_extract_traces,
     mock_save_auto_json,
     mock_plot_traces,
@@ -300,7 +300,7 @@ def test_main_command_auto_roi_interactive(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -348,7 +348,7 @@ def test_main_command_auto_roi_interactive(
 
 
 @patch("ca2roi.cli.auto_select_rois_from_fluctuation")
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -360,7 +360,7 @@ def test_main_command_auto_roi_no_rois_found(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     mock_auto_select,
     cli_runner,
     temp_dir,
@@ -369,7 +369,7 @@ def test_main_command_auto_roi_no_rois_found(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity
@@ -400,7 +400,7 @@ def test_main_command_auto_roi_no_rois_found(
 
 @patch("ca2roi.cli.handle_rois")
 @patch("ca2roi.cli.extract_and_save_traces")
-@patch("ca2roi.cli.process_video")
+@patch("ca2roi.cli.load_video_from_path")
 @patch("ca2roi.cli.compute_bleaching")
 @patch("ca2roi.cli.save_bleaching")
 @patch("ca2roi.cli.compute_fluctuation_map")
@@ -412,7 +412,7 @@ def test_main_command_manual_roi_fallback(
     mock_compute_fluct,
     mock_save_bleaching,
     mock_compute_bleaching,
-    mock_process_video,
+    mock_load_video_from_path,
     mock_extract_traces,
     mock_handle_rois,
     cli_runner,
@@ -422,7 +422,7 @@ def test_main_command_manual_roi_fallback(
     # Setup mocks
     mock_frames = Mock()
     mock_info = {"fps": 30.0, "n_frames": 10}
-    mock_process_video.return_value = (mock_frames, mock_info)
+    mock_load_video_from_path.return_value = (mock_frames, mock_info)
 
     mock_mean_intensity = Mock()
     mock_compute_bleaching.return_value = mock_mean_intensity

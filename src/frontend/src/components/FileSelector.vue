@@ -79,16 +79,15 @@ const handleFileToggle = async (filename: string) => {
   const index = currentSelection.indexOf(filename)
 
   if (index > -1) {
+    // If clicking on already selected file, deselect it
     currentSelection.splice(index, 1)
+    selectedVideoPath.value = ''
+    emit('first-frame-received', null)
   } else {
-    currentSelection.push(filename)
-  }
-
-  emit('files-selected', currentSelection)
-
-  // If this is a single video selection, automatically upload and process
-  if (currentSelection.length === 1 && isVideoFile(filename)) {
-    selectedVideoPath.value = currentSelection[0]
+    // If selecting a new file, clear previous selection and select only this one
+    currentSelection.length = 0 // Clear the array
+    currentSelection.push(filename) // Add only the new file
+    selectedVideoPath.value = filename
     console.log('Single video selected, attempting upload:', filename)
     
     try {
@@ -105,9 +104,9 @@ const handleFileToggle = async (filename: string) => {
     } catch (error) {
       console.error('Failed to upload and process video:', error)
     }
-  } else {
-    selectedVideoPath.value = ''
   }
+
+  emit('files-selected', currentSelection)
 }
 
 const handleRemoveFile = (filename: string, event: Event) => {

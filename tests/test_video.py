@@ -3,11 +3,11 @@ import pytest
 import numpy as np
 import cv2
 from unittest.mock import patch, Mock
-from ca2roi.video import process_video, VideoMetadata, get_first_frame
+from ca2roi.video import load_video_from_path, VideoMetadata, get_first_frame
 
 
 @patch("cv2.VideoCapture")
-def test_process_video_basic(mock_video_capture, temp_dir):
+def test_load_video_from_path_basic(mock_video_capture, temp_dir):
     """Test basic video processing functionality."""
     # Create mock video capture object
     mock_cap = Mock()
@@ -35,7 +35,7 @@ def test_process_video_basic(mock_video_capture, temp_dir):
 
     test_video_path = os.path.join(temp_dir, "test.avi")
 
-    video_metadata = process_video(test_video_path)
+    video_metadata = load_video_from_path(test_video_path)
 
     # Verify results
     assert video_metadata.frames.shape == (3, 100, 100)
@@ -65,7 +65,7 @@ def test_process_video_basic(mock_video_capture, temp_dir):
 
 
 @patch("cv2.VideoCapture")
-def test_process_video_color_conversion(mock_video_capture, temp_dir):
+def test_load_video_from_path_color_conversion(mock_video_capture, temp_dir):
     """Test that color frames are converted to grayscale."""
     mock_cap = Mock()
     mock_video_capture.return_value = mock_cap
@@ -88,7 +88,7 @@ def test_process_video_color_conversion(mock_video_capture, temp_dir):
         mock_cap.read.side_effect = [(True, color_frame), (False, None)]
 
         test_video_path = os.path.join(temp_dir, "test_color.avi")
-        video_metadata = process_video(test_video_path)
+        video_metadata = load_video_from_path(test_video_path)
 
         # Verify color conversion was called
         mock_cvt_color.assert_called_once_with(color_frame, cv2.COLOR_BGR2GRAY)
@@ -96,7 +96,7 @@ def test_process_video_color_conversion(mock_video_capture, temp_dir):
 
 
 @patch("cv2.VideoCapture")
-def test_process_video_empty_video(mock_video_capture, temp_dir):
+def test_load_video_from_path_empty_video(mock_video_capture, temp_dir):
     """Test processing an empty video."""
     mock_cap = Mock()
     mock_video_capture.return_value = mock_cap
@@ -111,7 +111,7 @@ def test_process_video_empty_video(mock_video_capture, temp_dir):
     mock_cap.read.return_value = (False, None)
 
     test_video_path = os.path.join(temp_dir, "empty.avi")
-    video_metadata = process_video(test_video_path)
+    video_metadata = load_video_from_path(test_video_path)
 
     assert video_metadata.frames.shape == (0, 100, 100)
     assert video_metadata.n_frames == 0

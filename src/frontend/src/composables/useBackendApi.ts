@@ -1,4 +1,4 @@
-import type { FirstFrameData, ROI, AutoROIConfig, BleachingSettings, AnalysisData } from '../types'
+import type { FirstFrameData, ROI, AutoROIConfig, BleachingSettings, AnalysisData, Coords } from '../types'
 
 export function useBackendApi() {
   const uploadVideo = async (file: File): Promise<FirstFrameData> => {
@@ -61,40 +61,7 @@ export function useBackendApi() {
     return result
   }
 
-  const createROI = async (
-    coords: [number, number, number, number],
-    videoPath: string,
-    bleachingSettings?: BleachingSettings
-  ): Promise<{ intensity_trace: number[]; time_points: number[] }> => {
-    const response = await fetch('/api/roi-creation', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        video_path: videoPath,
-        roi_data: {
-          coords: coords
-        },
-        adjust_bleaching: bleachingSettings?.adjustBleaching ?? false,
-        fit_type: bleachingSettings?.fitType ?? 'inverse',
-        smoothing: bleachingSettings?.smoothing ?? 0.0
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('✅ ROI created:', result)
-    return result
-  }
-
-  const runAutoROI = async (videoPath: string, config: AutoROIConfig): Promise<{
-    rois: Array<{ id: number; coords: [number, number, number, number]; avg_intensity: number[] }>;
-    stats: { n_rois: number }
-  }> => {
+  const runAutoROI = async (config: AutoROIConfig): Promise<Coords[]> => {
     console.log('🤖 Running auto ROI detection with config:', config)
     const response = await fetch('/api/auto-roi', {
       method: 'POST',
@@ -102,7 +69,6 @@ export function useBackendApi() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        video_path: videoPath,
         threshold_percentage: config.thresholdPercentage,
         min_distance_percentage: config.minDistancePercentage,
         n_clusters: config.nClusters
@@ -114,11 +80,16 @@ export function useBackendApi() {
     }
 
     const result = await response.json()
-    console.log('✅ Auto ROI completed:', result)
-    return result
-  }
+    if (result.status !== 'completed') {
+      throw new Error(`Auto ROI failed: ${result.status}`)
+    }
+    else {
+      console.log('✅ Auto ROI completed:', result)
+      return result.coords as Coords[]
+    }
+ }
 
-  const getROITraces = async (rois: Array<{ id: number; coords: [number, number, number, number] }>, smoothing: number): Promise<{
+  const getROITraces = async (rois: Array<{ id: number; coords: Coords }>, smoothing: number): Promise<{
     traces: Array<{ roi_id: number; intensity_trace: number[]; time_points: number[] }>
   }> => {
     console.log('📊 Fetching ROI traces for:', rois.map(r => r.id))
@@ -179,7 +150,6 @@ export function useBackendApi() {
   return {
     uploadVideo,
     runAnalysis,
-    createROI,
     runAutoROI,
     getROITraces,
     updateFitPreference,

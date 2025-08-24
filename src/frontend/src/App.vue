@@ -9,10 +9,9 @@ import type { ROI, BleachingData, FirstFrameData } from './types'
 
 // Application state
 const selectedFiles = ref<string[]>([])
-const selectedROIs = ref<number[]>([]) // No ROIs selected by default
 
 // ROI operations composable to access available ROIs
-const { availableROIs } = useROIOperations()
+const { availableROIs, selectedROIs } = useROIOperations()
 const backendVersion = ref<string>('...')
 const firstFrameData = ref<FirstFrameData | null>(null)
 const bleachingData = reactive<BleachingData>({
@@ -80,26 +79,6 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
   bleachingData.mainPlotData = mainPlotData
 }
 
-const handleROICreated = (roi: ROI) => {
-  console.log('🎯 ROI created:', roi)
-  // Add the new ROI to the selected ROIs list since it's created as selected: true
-  if (roi.selected && !selectedROIs.value.includes(roi.id)) {
-    selectedROIs.value.push(roi.id)
-  }
-}
-
-const handleROIUpdated = (roi: ROI) => {
-  console.log('🔄 ROI updated:', roi)
-  // Update the selected ROIs list based on the ROI's selected state
-  const index = selectedROIs.value.indexOf(roi.id)
-  if (roi.selected && index === -1) {
-    selectedROIs.value.push(roi.id)
-  } else if (!roi.selected && index !== -1) {
-    selectedROIs.value.splice(index, 1)
-  }
-}
-
-
 
 const createDummyAnalysisData = () => {
   // Create dummy bleaching data for debugging
@@ -157,8 +136,6 @@ const createDummyAnalysisData = () => {
             }"
             @rois-selected="handleROISelection"
             @run-analysis="handleRunAnalysis"
-            @roi-created="handleROICreated"
-            @roi-updated="handleROIUpdated"
           />
         </div>
 

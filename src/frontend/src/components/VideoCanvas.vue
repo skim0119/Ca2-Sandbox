@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import type { FirstFrameData } from '../types'
+import type { FirstFrameData, Coords } from '../types'
 
 interface Props {
   firstFrameData?: FirstFrameData | null
@@ -8,13 +8,13 @@ interface Props {
     id: number
     name: string
     color: string
-    coords: [number, number, number, number]
+    coords: Coords
     selected: boolean
   }>
 }
 
 interface Emits {
-  (e: 'roi-drawn', coords: [number, number, number, number]): void
+  (e: 'roi-drawn', coords: Coords): void
 }
 
 const props = defineProps<Props>()
@@ -83,16 +83,16 @@ const handleMouseUp = async (event: MouseEvent) => {
 
   // Create ROI from drawing
   const { x0, y0, x1, y1 } = currentDrawing.value
-  const coords: [number, number, number, number] = [
-    Math.min(x0, x1),
-    Math.min(y0, y1),
-    Math.max(x0, x1),
-    Math.max(y0, y1)
-  ]
+  const coords: Coords = {
+    x0: Math.min(x0, x1),
+    y0: Math.min(y0, y1),
+    x1: Math.max(x0, x1),
+    y1: Math.max(y0, y1)
+  }
 
   // Only create ROI if it has reasonable size
-  const width = coords[2] - coords[0]
-  const height = coords[3] - coords[1]
+  const width = coords.x1 - coords.x0
+  const height = coords.y1 - coords.y0
   if (width < 10 || height < 10) {
     drawingStart.value = null
     currentDrawing.value = null
@@ -154,10 +154,10 @@ onUnmounted(() => {
           class="roi-box"
           :class="{ 'selected': roi.selected }"
           :style="{
-            left: roi.coords[0] + 'px',
-            top: roi.coords[1] + 'px',
-            width: (roi.coords[2] - roi.coords[0]) + 'px',
-            height: (roi.coords[3] - roi.coords[1]) + 'px',
+            left: roi.coords.x0 + 'px',
+            top: roi.coords.y0 + 'px',
+            width: (roi.coords.x1 - roi.coords.x0) + 'px',
+            height: (roi.coords.y1 - roi.coords.y0) + 'px',
             borderColor: roi.color
           }"
         >

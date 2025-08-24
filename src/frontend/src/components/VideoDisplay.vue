@@ -4,7 +4,7 @@ import VideoCanvas from './VideoCanvas.vue'
 import ROIList from './ROIList.vue'
 import AutoROIConfig from './AutoROIConfig.vue'
 import { useROIOperations } from '../composables/useROIOperations'
-import type { ROI, AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings } from '../types'
+import type { ROI, AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings, Coords } from '../types'
 
 interface Props {
   selectedFiles: string[]
@@ -16,8 +16,6 @@ interface Props {
 interface Emits {
   (e: 'rois-selected', rois: number[]): void
   (e: 'run-analysis'): void
-  (e: 'roi-created', roi: ROI): void
-  (e: 'roi-updated', roi: ROI): void
 }
 
 const props = defineProps<Props>()
@@ -42,11 +40,8 @@ const autoROIConfig = ref<AutoROIConfigType>({
   nClusters: 3
 })
 
-const handleROIDrawn = async (coords: [number, number, number, number]) => {
-  const newROI = await createROI(coords, props.selectedFiles[0], props.bleachingSettings)
-  if (newROI) {
-    emit('roi-created', newROI)
-  }
+const handleROIDrawn = async (coords: Coords) => {
+  await createROI(coords, props.selectedFiles[0], props.bleachingSettings)
 }
 
 const handleROIToggle = async (roiId: number) => {
@@ -71,8 +66,8 @@ const handleAutoROIConfigUpdated = (config: AutoROIConfigType) => {
 }
 
 const handleRunAutoROI = async () => {
-  const newROIs = await runAutoROI(props.selectedFiles[0], autoROIConfig.value)
-  newROIs.forEach(roi => emit('roi-created', roi))
+  const newROICoordss = await runAutoROI(autoROIConfig.value)
+  newROICoordss.forEach(coords => createROI(coords, props.selectedFiles[0], props.bleachingSettings))
 }
 
 const handleRunAnalysis = () => {

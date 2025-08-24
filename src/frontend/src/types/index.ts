@@ -1,8 +1,15 @@
+export interface Coords {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
 export interface ROI {
   id: number
   name: string
   color: string
-  coords: [number, number, number, number]
+  coords: Coords
   selected: boolean
   intensityTrace?: number[]
   timePoints?: number[]

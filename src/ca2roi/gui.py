@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import base64
 
 from . import __version__ as ca2roi_version
-from .video import process_video, process_video_metadata_only, VideoMetadata, convert_frame_to_base64
+from .video import load_video_from_contents, VideoContentsHandle, VideoMetadata, convert_frame_to_base64
 from .roi import handle_rois, extract_and_save_traces
 from .bleaching import (
     compute_bleaching,
@@ -93,6 +93,7 @@ def create_app():
 app = create_app()
 
 # Global cache for analysis results
+uploaded_video_contents: dict[str, VideoContentsHandle] = {}  # Keep reference
 current_video_data: VideoMetadata | None = None
 
 
@@ -139,6 +140,7 @@ async def upload_video(video_file: UploadFile):
     }
     """
     global current_video_data
+    global uploaded_video_contents
     
     print(f"Upload endpoint called with file: {video_file.filename}, size: {video_file.size}, content_type: {video_file.content_type}")
     
@@ -150,28 +152,21 @@ async def upload_video(video_file: UploadFile):
     try:
         print("Reading file content...")
         content = await video_file.read()
-        print(f"File content read, size: {len(content)} bytes")
         
         # Save uploaded file to temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(video_file.filename).suffix) as temp_file:
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-            print(f"File saved to temporary location: {temp_file_path}")
-        
-            # Process the video (load all frames for ROI analysis)
-            print("Processing video with cv2...")
-            meta_data = process_video(temp_file_path, verbose=True) # FIXME: use debug flag
-            print("Video processing completed")
+        vc = VideoContentsHandle(video_file.filename, content)
+        uploaded_video_contents[video_file.filename] = vc
 
-            first_frame = meta_data.get_first_frame()
-            video_info = meta_data.info()
-        
-            current_video_data = meta_data
-            print(f"Video uploaded and processed successfully. Video info: {video_info}")
-        
-        # Clean up temporary file
-        os.unlink(temp_file_path)
-        print("Temporary file cleaned up")
+        # Process the video (load all frames for ROI analysis)
+        print("Processing video with cv2...")
+        meta_data = load_video_from_contents(vc, verbose=True) # FIXME: use debug flag
+        print("Video processing completed")
+
+        first_frame = meta_data.get_first_frame()
+        video_info = meta_data.info()
+    
+        current_video_data = meta_data
+        print(f"Video uploaded and processed successfully. Video info: {video_info}")
         
         return JSONResponse({
             "first_frame": convert_frame_to_base64(first_frame),
@@ -180,8 +175,6 @@ async def upload_video(video_file: UploadFile):
         
     except Exception as e:
         print(f"Failed to process uploaded video: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=500, detail=f"Failed to process uploaded video: {str(e)}"
         )
@@ -223,19 +216,9 @@ async def auto_select_rois(request: dict):
     }
     """
     assert_video_selected()
-    video_path = Path(request.get("video_path", ""))
     threshold_percentage = request.get("threshold_percentage", 99.0)
     min_distance_percentage = request.get("min_distance_percentage", 0.01)
     n_clusters = request.get("n_clusters", 3)
-
-    # Validate video file exists and has supported format
-    if not video_path.exists():
-        raise HTTPException(
-            status_code=404, detail=f"Video file not found: {video_path}"
-        )
-
-    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
-        raise HTTPException(status_code=400, detail="Unsupported file format")
 
     try:
         # Process video
@@ -243,7 +226,7 @@ async def auto_select_rois(request: dict):
         frames = meta_data.frames
 
         # Compute bleaching for fluctuation map
-        mean_intensity = compute_bleaching(frames)
+        mean_intensity = meta_data.get_intensities()
 
         # Compute fluctuation map
         fluct_map = compute_fluctuation_map(frames, mean_intensity)
@@ -275,8 +258,7 @@ async def auto_select_rois(request: dict):
         return JSONResponse(
             {
                 "status": "completed",
-                "rois": roi_data["rois"],
-                "stats": roi_data["stats"],
+                "coords": [roi["coords"] for roi in roi_data["rois"]],
             }
         )
 
@@ -317,8 +299,7 @@ async def run_bleaching_analysis(request: dict):
     try:
         # Process video and compute bleaching
         meta_data = current_video_data
-        frames = meta_data.frames
-        mean_intensity = compute_bleaching(frames)
+        mean_intensity = meta_data.get_intensities()
 
         print("Analysis bleaching:")
         print("video info: ", meta_data.info())
@@ -388,7 +369,8 @@ async def run_bleaching_analysis(request: dict):
         return JSONResponse(result)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        print(f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500)
 
 
 @app.post("/api/update-fit-preference")
@@ -410,77 +392,6 @@ async def update_fit_preference(request: dict):
     return JSONResponse(
         {"status": "updated", "fit_type": fit_type}
     )
-
-
-@app.post("/api/roi-creation")
-async def handle_roi_creation(request: dict):
-    """Handle ROI creation and return intensity trace data.
-
-    Example request body:
-    {
-        "video_path": "/path/to/video.mp4",
-        "roi_data": {
-            "id": 1,
-            "coords": [x0, y0, x1, y1]
-        },
-        "adjust_bleaching": true,
-        "fit_type": "inverse",
-        "smoothing": 0.0
-    }
-    """
-    assert_video_selected()
-    video_path = request.get("video_path", "")
-    roi_data = request.get("roi_data", {})
-    roi_id = roi_data.get("id", 1)
-    coords = roi_data.get("coords", [0, 0, 100, 100])
-    smoothing = request.get("smoothing", 0.0)
-
-    print(f"ROI creation requested: {request}")
-
-    try:
-        # Process video to get frames
-        meta_data = current_video_data
-        frames = meta_data.frames
-        n_frames = frames.shape[0]
-        fps = meta_data.fps
-        time_points = np.arange(n_frames) / fps
-
-        # Extract intensity trace from ROI coordinates
-        x0, y0, x1, y1 = coords
-        height, width = frames.shape[1:]
-
-        # Ensure coordinates are within bounds
-        x0 = int(max(0, min(x0, width - 1)))
-        y0 = int(max(0, min(y0, height - 1)))
-        x1 = int(max(x0 + 1, min(x1, width)))
-        y1 = int(max(y0 + 1, min(y1, height)))
-
-        # Create mask for ROI region
-        mask = np.zeros((height, width), dtype=bool)
-        mask[y0:y1, x0:x1] = True
-
-        # Extract mean intensity for each frame in the ROI
-        intensity_trace = frames[:, mask].mean(axis=1)
-
-        # Apply exponential moving average smoothing if requested
-        if smoothing > 0:
-            from ca2roi.smoothing import smooth_intensity_trace
-
-            intensity_trace = smooth_intensity_trace(intensity_trace, smoothing)
-
-        return JSONResponse(
-            {
-                "roi_id": roi_id,
-                "coords": coords,
-                "intensity_trace": intensity_trace.tolist(),
-                "time_points": time_points.tolist(),
-                "message": f"ROI {roi_id} created successfully with {n_frames} frames",
-            }
-        )
-
-    except Exception as e:
-        print(f"Error creating ROI: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create ROI: {str(e)}")
 
 
 @app.post("/api/get-roi-traces")
@@ -532,7 +443,6 @@ async def get_roi_traces(request: dict):
             roi_id = roi.get("id", 0)
             coords = roi.get("coords", [0, 0, 100, 100])
 
-            # Extract intensity trace from ROI coordinates (same logic as roi-creation)
             x0, y0, x1, y1 = coords
 
             # Ensure coordinates are within bounds

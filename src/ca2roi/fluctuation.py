@@ -44,7 +44,7 @@ def save_fluctuation_overlay(fluctuation_map, out_path):
 
 def auto_select_rois_from_fluctuation(
     fluctuation_map, frames, threshold, min_distance, workspace
-):
+) -> dict:
     """
     Automatically select ROIs based on fluctuation map thresholding and clustering.
 

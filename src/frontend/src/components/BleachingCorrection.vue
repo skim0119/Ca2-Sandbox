@@ -153,12 +153,14 @@ const handleGetROITraces = async () => {
   }
 
   try {
+    console.log('📊 Available ROIs:', props.availableROIs)
     console.log('📊 Fetching ROI traces for:', props.selectedROIs)
 
     // Filter available ROIs to get the selected ones with full data
     const selectedROIObjects = props.availableROIs.filter(roi =>
       props.selectedROIs.includes(roi.id)
     )
+    console.log('📊 Selected ROIs:', selectedROIObjects)
 
     const { getROITraces } = useBackendApi()
     const result = await getROITraces(
