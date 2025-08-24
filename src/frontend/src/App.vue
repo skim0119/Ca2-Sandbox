@@ -103,7 +103,7 @@ const handleRunAnalysis = async () => {
     return
   }
 
-  console.log('🚀 Analysis requested for video:', selectedFiles.value[0])
+  console.log('Analysis requested for video:', selectedFiles.value[0])
 
   try {
     const response = await fetch('/api/run-analysis', {
@@ -121,21 +121,19 @@ const handleRunAnalysis = async () => {
     }
 
     const result = await response.json()
-    console.log('✅ Analysis completed:', result)
+    console.log('Analysis completed:', result)
 
     // Pass the analysis data to the bleaching correction component
     bleachingData.analysisData = result.bleaching_data
     bleachingData.analysisId = result.analysis_id
 
   } catch (error) {
-    console.error('❌ Analysis failed:', error)
+    console.error('Analysis failed:', error)
     // Create dummy analysis data for debugging
     bleachingData.analysisData = createDummyAnalysisData()
     bleachingData.analysisId = 'dummy_analysis'
   }
 }
-
-
 
 const handleMainPlotUpdate = (mainPlotData: {
   timePoints: number[]
@@ -147,12 +145,12 @@ const handleMainPlotUpdate = (mainPlotData: {
     tension: number
   }>
 }) => {
-  console.log('📊 Main plot updated from button:', mainPlotData)
+  console.log('Main plot updated from button:', mainPlotData)
   bleachingData.mainPlotData = mainPlotData
 }
 
 const handleROICreated = (roi: ROI) => {
-  console.log('🎯 ROI created:', roi)
+  console.log('ROI created:', roi)
   // Add the new ROI to the selected ROIs list since it's created as selected: true
   if (roi.selected && !selectedROIs.value.includes(roi.id)) {
     selectedROIs.value.push(roi.id)
@@ -160,7 +158,7 @@ const handleROICreated = (roi: ROI) => {
 }
 
 const handleROIUpdated = (roi: ROI) => {
-  console.log('🔄 ROI updated:', roi)
+  console.log('ROI updated:', roi)
   // Update the selected ROIs list based on the ROI's selected state
   const index = selectedROIs.value.indexOf(roi.id)
   if (roi.selected && index === -1) {
@@ -172,7 +170,7 @@ const handleROIUpdated = (roi: ROI) => {
 
 
 
-const createDummyAnalysisData = () => {
+const createDummyAnalysisData = () => {  // Deprecated:: Consider removing
   // Create dummy bleaching data for debugging
   const timePoints = Array.from({ length: 100 }, (_, i) => i * 0.1)
   const meanIntensity = timePoints.map(t => 100 * Math.exp(-0.05 * t) + Math.random() * 5)

@@ -67,7 +67,7 @@ export function useROIOperations() {
 
       if (response.ok) {
         const result = await response.json()
-        console.log('✅ ROI created:', result)
+        console.log('ROI created:', result)
 
         const newROI: ROI = {
           id: roiId,
@@ -83,7 +83,7 @@ export function useROIOperations() {
         return newROI
       }
     } catch (error) {
-      console.error('❌ Failed to create ROI:', error)
+      console.error('Failed to create ROI:', error)
     }
     return null
   }
@@ -96,7 +96,7 @@ export function useROIOperations() {
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
       availableROIs.value[roiIndex].selected = true
-      console.log('✅ ROI selected:', roiId)
+      console.log('ROI selected:', roiId)
       return true
     }
     return false
@@ -110,7 +110,7 @@ export function useROIOperations() {
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
       availableROIs.value[roiIndex].selected = false
-      console.log('✅ ROI unselected:', roiId)
+      console.log('ROI unselected:', roiId)
       return true
     }
     return false
@@ -147,7 +147,7 @@ export function useROIOperations() {
       }
 
       const result = await response.json()
-      console.log('✅ Auto ROI completed:', result)
+      console.log('Auto ROI completed:', result)
 
       // Clear existing ROIs and add the new ones
       availableROIs.value = []
@@ -167,11 +167,11 @@ export function useROIOperations() {
       })
 
       availableROIs.value.push(...newROIs)
-      console.log(`🎯 Auto ROI detected ${result.stats.n_rois} regions`)
+      console.log(`Auto ROI detected ${result.stats.n_rois} regions`)
       return newROIs
 
     } catch (error) {
-      console.error('❌ Auto ROI failed:', error)
+      console.error('Auto ROI failed:', error)
       return []
     } finally {
       isAutoROIRunning.value = false
