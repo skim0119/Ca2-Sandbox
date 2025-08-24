@@ -30,7 +30,9 @@ export function useROIOperations() {
 
     try {
       const { getROITraces } = useBackendApi()
-      const result = await getROITraces(coords, bleachingSettings?.smoothing ?? 0.0)
+      const result = await getROITraces(
+        [{ id: roiId, coords: coords }],
+      bleachingSettings?.smoothing ?? 0.0)
 
       const newROI: ROI = {
         id: roiId,
@@ -38,8 +40,7 @@ export function useROIOperations() {
         color: roiColor,
         coords: coords,
         selected: true,
-        intensityTrace: result.intensity_trace,
-        timePoints: result.time_points
+        intensityTrace: result[0].intensity_trace,
       }
 
       availableROIs.value.push(newROI)

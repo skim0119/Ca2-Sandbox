@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { FirstFrameData } from '../types'
 import { useBackendApi } from '../composables/useBackendApi'
 
 interface Props {
@@ -8,23 +9,12 @@ interface Props {
 
 interface Emits {
   (e: 'files-selected', files: string[]): void
-  (e: 'first-frame-received', data: {
-    first_frame: string;
-    video_info: {
-      width: number;
-      height: number;
-      fps: number;
-      total_frames: number;
-      debug_mode?: boolean;
-      original_path?: string;
-    }
-  } | null): void
+  (e: 'first-frame-received', data: FirstFrameData | null): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const folderPath = ref<string>('')
 const fileList = ref<string[]>([])
 const selectedVideoPath = ref<string>('')
 const uploadedFiles = ref<File[]>([])
@@ -53,7 +43,7 @@ const handleFileSelect = () => {
 
       // Filter to only include video files
       const videoFiles = files.filter(file => isVideoFile(file.name))
-      
+
       // Add new files to existing lists (avoid duplicates)
       videoFiles.forEach(file => {
         if (!fileList.value.includes(file.name)) {
@@ -74,7 +64,7 @@ const handleFileSelect = () => {
 const handleFileToggle = async (filename: string) => {
   console.log('File toggle called for:', filename)
   console.log('Available uploaded files:', uploadedFiles.value.map(f => f.name))
-  
+
   const currentSelection = [...props.selectedFiles]
   const index = currentSelection.indexOf(filename)
 
@@ -89,7 +79,7 @@ const handleFileToggle = async (filename: string) => {
     currentSelection.push(filename) // Add only the new file
     selectedVideoPath.value = filename
     console.log('Single video selected, attempting upload:', filename)
-    
+
     try {
       // Find the actual File object for this filename
       const file = uploadedFiles.value.find(f => f.name === filename)
@@ -97,7 +87,7 @@ const handleFileToggle = async (filename: string) => {
         console.log('Found file object:', file.name, file.size, file.type)
         const result = await uploadAndProcessVideo(file)
         // Emit the first frame data to parent component
-        emit('first-frame-received', result)
+        emit('first-frame-received', result || null)
       } else {
         console.error('File object not found for filename:', filename)
       }
@@ -111,28 +101,28 @@ const handleFileToggle = async (filename: string) => {
 
 const handleRemoveFile = (filename: string, event: Event) => {
   event.stopPropagation() // Prevent triggering the file toggle
-  
+
   console.log('Removing file:', filename)
-  
+
   // Remove from file list
   const fileIndex = fileList.value.indexOf(filename)
   if (fileIndex > -1) {
     fileList.value.splice(fileIndex, 1)
   }
-  
+
   // Remove from uploaded files
   const uploadedIndex = uploadedFiles.value.findIndex(f => f.name === filename)
   if (uploadedIndex > -1) {
     uploadedFiles.value.splice(uploadedIndex, 1)
   }
-  
+
   // Remove from selected files if it was selected
   const currentSelection = [...props.selectedFiles]
   const selectedIndex = currentSelection.indexOf(filename)
   if (selectedIndex > -1) {
     currentSelection.splice(selectedIndex, 1)
     emit('files-selected', currentSelection)
-    
+
     // If no files are selected anymore, clear the video
     if (currentSelection.length === 0) {
       selectedVideoPath.value = ''
@@ -143,11 +133,11 @@ const handleRemoveFile = (filename: string, event: Event) => {
 
 const handleClearAll = () => {
   console.log('Clearing all files')
-  
+
   // Clear all arrays
   fileList.value = []
   uploadedFiles.value = []
-  
+
   // Clear selections
   emit('files-selected', [])
   selectedVideoPath.value = ''
@@ -162,54 +152,10 @@ const uploadAndProcessVideo = async (file: File) => {
     const result = await uploadVideo(file)
     return result
   } catch (error) {
-    console.error('❌ Error uploading video to backend:', error)
-
-    // Create dummy data for debugging
-    const dummyData = createDummyFrameData(file.name)
-    console.log('🔄 Using dummy data for debugging:', dummyData)
-
-    return dummyData
+    console.error('Error uploading video to backend:', error)
   }
 }
 
-const createDummyFrameData = (videoPath: string) => {
-  // Create a dummy SVG image with debugging information
-  const dummySvg = `
-    <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="#2c3e50"/>
-      <text x="50%" y="30%" text-anchor="middle" fill="white" font-family="Arial" font-size="16" font-weight="bold">
-        🔧 DEV MODE - DUMMY FRAME
-      </text>
-      <text x="50%" y="45%" text-anchor="middle" fill="#3498db" font-family="Arial" font-size="12">
-        Backend not available
-      </text>
-      <text x="50%" y="60%" text-anchor="middle" fill="#e74c3c" font-family="Arial" font-size="10">
-        Video Path: ${videoPath}
-      </text>
-      <text x="50%" y="75%" text-anchor="middle" fill="#f39c12" font-family="Arial" font-size="10">
-        API Call: POST /api/initiate-analysis
-      </text>
-      <text x="50%" y="85%" text-anchor="middle" fill="#95a5a6" font-family="Arial" font-size="8">
-        Check console for debugging info
-      </text>
-    </svg>
-  `
-
-  const base64Svg = btoa(dummySvg)
-  const dummyImage = `data:image/svg+xml;base64,${base64Svg}`
-
-  return {
-    first_frame: dummyImage,
-    video_info: {
-      width: 400,
-      height: 300,
-      fps: 30.0,
-      total_frames: 1000,
-      debug_mode: true,
-      original_path: videoPath
-    }
-  }
-}
 </script>
 
 <template>

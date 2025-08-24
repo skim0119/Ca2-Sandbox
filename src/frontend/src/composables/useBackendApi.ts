@@ -1,4 +1,4 @@
-import type { FirstFrameData, ROI, AutoROIConfig, BleachingSettings, AnalysisData, Coords } from '../types'
+import type { FirstFrameData, AutoROIConfig, AnalysisData, Coords } from '../types'
 
 export function useBackendApi() {
   const uploadVideo = async (file: File): Promise<FirstFrameData> => {
@@ -89,9 +89,9 @@ export function useBackendApi() {
     }
  }
 
-  const getROITraces = async (rois: Array<{ id: number; coords: Coords }>, smoothing: number): Promise<{
-    traces: Array<{ roi_id: number; intensity_trace: number[]; time_points: number[] }>
-  }> => {
+  const getROITraces = async (rois: Array<{ id: number; coords: Coords }>, smoothing: number): Promise<
+    Array<{ roi_id: number; intensity_trace: number[]}>
+  > => {
     console.log('📊 Fetching ROI traces for:', rois.map(r => r.id))
     const response = await fetch('/api/get-roi-traces', {
       method: 'POST',

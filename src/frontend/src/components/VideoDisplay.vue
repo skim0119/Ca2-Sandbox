@@ -108,7 +108,7 @@ watch(() => props.selectedFiles, (files) => {
 
       <div class="video-info">
         <span class="video-name">{{ currentVideo || 'No file selected' }}</span>
-        <div v-if="props.firstFrameData?.video_info.debug_mode" class="debug-indicator">
+        <div v-if="props.firstFrameData?.videoInfo.debugMode" class="debug-indicator">
           🔧 Debug Mode - Backend Not Available
         </div>
       </div>

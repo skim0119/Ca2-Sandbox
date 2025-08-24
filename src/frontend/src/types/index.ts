@@ -12,21 +12,20 @@ export interface ROI {
   coords: Coords
   selected: boolean
   intensityTrace?: number[]
-  timePoints?: number[]
 }
 
 export interface VideoInfo {
   width: number
   height: number
   fps: number
-  total_frames: number
-  debug_mode?: boolean
-  original_path?: string
+  totalFrames: number
+  debugMode?: boolean
+  originalPath?: string
 }
 
 export interface FirstFrameData {
-  first_frame: string
-  video_info: VideoInfo
+  firstFrame: string
+  videoInfo: VideoInfo
 }
 
 export interface AutoROIConfig {
@@ -42,13 +41,13 @@ export interface BleachingSettings {
 }
 
 export interface AnalysisData {
-  time_points: number[]
-  mean_intensity: number[]
-  fit_params: {
+  timePoints: number[]
+  meanIntensity: number[]
+  fitParams: {
     exponential?: number[]
     inverse?: number[]
   }
-  r2_scores: {
+  r2Scores: {
     exponential?: number
     inverse?: number
   }

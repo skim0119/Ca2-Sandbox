@@ -63,11 +63,11 @@ watch(() => props.bleachingData.analysisData, (data) => {
 
     // Update chart with real data
     bleachingChartData.value = {
-      labels: data.time_points,
+      labels: data.timePoints,
       datasets: [
         {
           label: 'Raw Data',
-          data: data.mean_intensity,
+          data: data.meanIntensity,
           borderColor: '#e74c3c',
           backgroundColor: 'rgba(231, 76, 60, 0.1)',
           tension: 0.1
@@ -76,10 +76,10 @@ watch(() => props.bleachingData.analysisData, (data) => {
     }
 
         // Add fitted curves if available
-    if (data.fit_params && data.fit_params.exponential) {
-      const expParams = data.fit_params.exponential
-      const expData = data.time_points.map((t: number) => expParams[0] * Math.exp(-t / expParams[1]))
-      const r2Exp = data.r2_scores.exponential?.toFixed(3) || 'N/A'
+    if (data.fitParams && data.fitParams.exponential) {
+      const expParams = data.fitParams.exponential
+      const expData = data.timePoints.map((t: number) => expParams[0] * Math.exp(-t / expParams[1]))
+      const r2Exp = data.r2Scores.exponential?.toFixed(3) || 'N/A'
       bleachingChartData.value.datasets.push({
         label: `Exponential Fit (R² = ${r2Exp})`,
         data: expData,
@@ -89,10 +89,10 @@ watch(() => props.bleachingData.analysisData, (data) => {
       })
     }
 
-    if (data.fit_params && data.fit_params.inverse) {
-      const invParams = data.fit_params.inverse
-      const invData = data.time_points.map((t: number) => invParams[0] / (1 + t / invParams[1]))
-      const r2Inv = data.r2_scores.inverse?.toFixed(3) || 'N/A'
+    if (data.fitParams && data.fitParams.inverse) {
+      const invParams = data.fitParams.inverse
+      const invData = data.timePoints.map((t: number) => invParams[0] / (1 + t / invParams[1]))
+      const r2Inv = data.r2Scores.inverse?.toFixed(3) || 'N/A'
       bleachingChartData.value.datasets.push({
         label: `Inverse Fit (R² = ${r2Inv})`,
         data: invData,
@@ -141,12 +141,12 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
       const { updateFitPreference } = useBackendApi()
       await updateFitPreference(props.bleachingData.analysisId, type)
     } catch (error) {
-      console.error('❌ Failed to update fit preference:', error)
+      console.error('Failed to update fit preference:', error)
     }
   }
 }
 
-const handleGetROITraces = async () => {
+const updateROITraces = async () => {
   if (!props.selectedFiles[0] || props.selectedROIs.length === 0) {
     console.log('📊 No video or ROIs selected for ROI traces')
     return
@@ -171,11 +171,16 @@ const handleGetROITraces = async () => {
       props.bleachingData.smoothing
     )
 
+    // Replace intensity trace in ROIs
+    selectedROIObjects.forEach((roi) => {
+      roi.intensityTrace = result.find(r => r.roi_id === roi.id)?.intensity_trace
+    })
+
     // Update the main plot data
-    if (result.traces && result.traces.length > 0) {
+    if (result && result.length > 0) {
       const mainPlotData = {
-        timePoints: result.traces[0].time_points,
-        datasets: result.traces.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
+        timePoints: props.bleachingData.analysisData?.timePoints || [],
+        datasets: result.map((trace: { roi_id: number; intensity_trace: number[] }, index: number) => ({
           label: `ROI ${trace.roi_id}`,
           data: trace.intensity_trace,
           borderColor: `hsl(${index * 60}, 70%, 50%)`,
@@ -295,14 +300,6 @@ const handleSaveToCSV = () => {
     <div class="main-plot-section">
       <div class="main-plot-header">
         <h3>Main Plot</h3>
-        <button
-          @click="handleGetROITraces"
-          class="get-traces-btn"
-          :disabled="!props.selectedFiles[0] || props.selectedROIs.length === 0"
-          title="Fetch ROI intensity traces from the backend"
-        >
-          Get ROI Traces
-        </button>
       </div>
       <div class="plot-container" :style="{ height: mainPlotHeight + 'px' }">
         <div v-if="mainChartData.datasets.length === 0" class="empty-state">

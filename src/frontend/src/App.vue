@@ -5,7 +5,7 @@ import VideoDisplay from './components/VideoDisplay.vue'
 import BleachingCorrection from './components/BleachingCorrection.vue'
 import { useROIOperations } from './composables/useROIOperations'
 import { useBackendApi } from './composables/useBackendApi'
-import type { ROI, BleachingData, FirstFrameData } from './types'
+import type { BleachingData, FirstFrameData } from './types'
 
 // Application state
 const selectedFiles = ref<string[]>([])
@@ -15,7 +15,7 @@ const { availableROIs, selectedROIs } = useROIOperations()
 const backendVersion = ref<string>('...')
 const firstFrameData = ref<FirstFrameData | null>(null)
 const bleachingData = reactive<BleachingData>({
-  adjustBleaching: true,
+  adjustBleaching:true,
   smoothing: 0.0,
   fitType: 'inverse',
   analysisData: undefined,
@@ -66,9 +66,6 @@ const handleRunAnalysis = async () => {
 
   } catch (error) {
     console.error('Analysis failed:', error)
-    // Create dummy analysis data for debugging
-    bleachingData.analysisData = createDummyAnalysisData()
-    bleachingData.analysisId = 'dummy_analysis'
   }
 }
 
@@ -78,30 +75,6 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
 }
 
 
-const createDummyAnalysisData = () => {  // Deprecated:: Consider removing
-  // Create dummy bleaching data for debugging
-  const timePoints = Array.from({ length: 100 }, (_, i) => i * 0.1)
-  const meanIntensity = timePoints.map(t => 100 * Math.exp(-0.05 * t) + Math.random() * 5)
-
-  return {
-    time_points: timePoints,
-    mean_intensity: meanIntensity,
-    fit_params: {
-      exponential: [100.0, 20.0],
-      inverse: [100.0, 15.0]
-    },
-    r2_scores: {
-      exponential: 0.985,
-      inverse: 0.992
-    },
-    video_info: {
-      width: 640,
-      height: 480,
-      fps: 30.0,
-      total_frames: 100
-    }
-  }
-}
 </script>
 
 <template>

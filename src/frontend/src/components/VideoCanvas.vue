@@ -29,14 +29,14 @@ const currentDrawing = ref<{ x0: number; y0: number; x1: number; y1: number } | 
 
 // Watch for first frame data from backend
 watch(() => props.firstFrameData, (data) => {
-  if (data && data.first_frame) {
-    videoFrame.value = data.first_frame
-    console.log('📺 Received first frame from backend:', data.video_info)
+  if (data && data.firstFrame) {
+    videoFrame.value = data.firstFrame
+    console.log('📺 Received first frame from backend:', data.videoInfo)
 
     // Log additional debug info if in debug mode
-    if (data.video_info.debug_mode) {
+    if (data.videoInfo.debugMode) {
       console.log('🔧 Debug mode detected - showing dummy frame')
-      console.log('📁 Original video path:', data.video_info.original_path)
+      console.log('📁 Original video path:', data.videoInfo.originalPath)
     }
   }
 }, { immediate: true })
