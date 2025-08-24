@@ -9,14 +9,14 @@ import numpy as np
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 import base64
 
 from . import __version__ as ca2roi_version
-from .video import process_video, VideoMetadata, convert_frame_to_base64
+from .video import load_video_from_contents, VideoContentsHandle, VideoMetadata, convert_frame_to_base64
 from .roi import handle_rois, extract_and_save_traces
 from .bleaching import (
     compute_bleaching,
@@ -93,7 +93,7 @@ def create_app():
 app = create_app()
 
 # Global cache for analysis results
-analysis_cache: dict[str, dict] = {}
+uploaded_video_contents: dict[str, VideoContentsHandle] = {}  # Keep reference
 current_video_data: VideoMetadata | None = None
 
 
@@ -124,15 +124,10 @@ async def get_version():
     return JSONResponse({"version": ca2roi_version, "package": "ca2roi"})
 
 
-@app.post("/api/initiate-analysis")
-async def get_video_first_frame(request: dict):
-    """Get the first frame of a video file as a base64 encoded image.
-
-    Example request body:
-    {
-        "video_path": "/path/to/your/video.mp4"
-    }
-
+@app.post("/api/upload-video")
+async def upload_video(video_file: UploadFile):
+    """Upload a video file and get the first frame as a base64 encoded image.
+    
     Example response:
     {
         "first_frame": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
@@ -145,37 +140,45 @@ async def get_video_first_frame(request: dict):
     }
     """
     global current_video_data
-    video_path = Path(request.get("video_path", ""))
-
-    # Validate video file exists and has supported format
-    if not video_path.exists():
-        raise HTTPException(
-            status_code=404, detail=f"Video file not found: {video_path}"
-        )
-
-    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
-        raise HTTPException(status_code=400, detail="Unsupported file format")
-
+    global uploaded_video_contents
+    
+    print(f"Upload endpoint called with file: {video_file.filename}, size: {video_file.size}, content_type: {video_file.content_type}")
+    
+    # Validate file format
+    if not video_file.filename or not video_file.filename.lower().endswith(('.avi', '.mp4', '.mov')):
+        print(f"Invalid file format: {video_file.filename}")
+        raise HTTPException(status_code=400, detail="Unsupported file format. Please upload .avi, .mp4, or .mov files.")
+    
     try:
-        # Get first frame and video info
-        meta_data = process_video(video_path.as_posix())
+        print("Reading file content...")
+        content = await video_file.read()
+        
+        # Save uploaded file to temporary location
+        vc = VideoContentsHandle(video_file.filename, content)
+        uploaded_video_contents[video_file.filename] = vc
+
+        # Process the video (load all frames for ROI analysis)
+        print("Processing video with cv2...")
+        meta_data = load_video_from_contents(vc, verbose=True) # FIXME: use debug flag
+        print("Video processing completed")
+
         first_frame = meta_data.get_first_frame()
         video_info = meta_data.info()
-
+    
         current_video_data = meta_data
-
-        return JSONResponse(
-            {
-                "first_frame": convert_frame_to_base64(first_frame),
-                "video_info": video_info,
-            }
-        )
-
+        print(f"Video uploaded and processed successfully. Video info: {video_info}")
+        
+        return JSONResponse({
+            "first_frame": convert_frame_to_base64(first_frame),
+            "video_info": video_info,
+        })
+        
     except Exception as e:
-        print(f"Failed to instantiate analysis: {str(e)}")
+        print(f"Failed to process uploaded video: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Failed to instantiate analysis: {str(e)}"
+            status_code=500, detail=f"Failed to process uploaded video: {str(e)}"
         )
+
 
 
 @app.post("/api/auto-roi")
@@ -213,19 +216,9 @@ async def auto_select_rois(request: dict):
     }
     """
     assert_video_selected()
-    video_path = Path(request.get("video_path", ""))
     threshold_percentage = request.get("threshold_percentage", 99.0)
     min_distance_percentage = request.get("min_distance_percentage", 0.01)
     n_clusters = request.get("n_clusters", 3)
-
-    # Validate video file exists and has supported format
-    if not video_path.exists():
-        raise HTTPException(
-            status_code=404, detail=f"Video file not found: {video_path}"
-        )
-
-    if not video_path.suffix.lower() in [".avi", ".mp4", ".mov", ".tiff", ".tif"]:
-        raise HTTPException(status_code=400, detail="Unsupported file format")
 
     try:
         # Process video
@@ -233,7 +226,7 @@ async def auto_select_rois(request: dict):
         frames = meta_data.frames
 
         # Compute bleaching for fluctuation map
-        mean_intensity = compute_bleaching(frames)
+        mean_intensity = meta_data.get_intensities()
 
         # Compute fluctuation map
         fluct_map = compute_fluctuation_map(frames, mean_intensity)
@@ -265,8 +258,7 @@ async def auto_select_rois(request: dict):
         return JSONResponse(
             {
                 "status": "completed",
-                "rois": roi_data["rois"],
-                "stats": roi_data["stats"],
+                "coords": [roi["coords"] for roi in roi_data["rois"]],
             }
         )
 
@@ -287,7 +279,6 @@ async def run_bleaching_analysis(request: dict):
 
     Example response:
     {
-        "analysis_id": "analysis_abc123",
         "status": "completed",
         "bleaching_data": {
             "time_points": [0.0, 0.033, 0.067, ...],
@@ -303,21 +294,15 @@ async def run_bleaching_analysis(request: dict):
         }
     }
     """
-    global analysis_cache
     assert_video_selected()
 
     try:
-        # Cache
-        video_path = Path(request.get("video_path", ""))
-        video_key = video_path.as_posix()
-        if video_key in analysis_cache:
-            print(f"Using cached analysis for: {video_path}")
-            return JSONResponse(analysis_cache[video_key])
-
         # Process video and compute bleaching
         meta_data = current_video_data
-        frames = meta_data.frames
-        mean_intensity = compute_bleaching(frames)
+        mean_intensity = meta_data.get_intensities()
+
+        print("Analysis bleaching:")
+        print("video info: ", meta_data.info())
 
         # Create time points
         time_points = np.arange(len(mean_intensity)) / meta_data.fps
@@ -365,9 +350,7 @@ async def run_bleaching_analysis(request: dict):
             r2_scores["inverse"] = None
 
         # Create analysis result
-        analysis_id = f"analysis_{hash(video_key) % 1000000}"
         result = {
-            "analysis_id": analysis_id,
             "status": "completed",
             "bleaching_data": {
                 "time_points": time_points.tolist(),
@@ -383,13 +366,11 @@ async def run_bleaching_analysis(request: dict):
             },
         }
 
-        # Cache the result
-        analysis_cache[video_key] = result
-
         return JSONResponse(result)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        print(f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500)
 
 
 @app.post("/api/update-fit-preference")
@@ -398,11 +379,9 @@ async def update_fit_preference(request: dict):
 
     Example request body:
     {
-        "analysis_id": "analysis_abc123",
         "fit_type": "exponential"  # or "inverse"
     }
     """
-    analysis_id = request.get("analysis_id")
     fit_type = request.get("fit_type")
 
     if fit_type not in ["exponential", "inverse"]:
@@ -410,82 +389,9 @@ async def update_fit_preference(request: dict):
 
     # In a real implementation, you might save this to a database
     # For now, we'll just log it
-    print(f"User preference updated: {analysis_id} -> {fit_type}")
-
     return JSONResponse(
-        {"status": "updated", "analysis_id": analysis_id, "fit_type": fit_type}
+        {"status": "updated", "fit_type": fit_type}
     )
-
-
-@app.post("/api/roi-creation")
-async def handle_roi_creation(request: dict):
-    """Handle ROI creation and return intensity trace data.
-
-    Example request body:
-    {
-        "video_path": "/path/to/video.mp4",
-        "roi_data": {
-            "id": 1,
-            "coords": [x0, y0, x1, y1]
-        },
-        "adjust_bleaching": true,
-        "fit_type": "inverse",
-        "smoothing": 0.0
-    }
-    """
-    assert_video_selected()
-    video_path = request.get("video_path", "")
-    roi_data = request.get("roi_data", {})
-    roi_id = roi_data.get("id", 1)
-    coords = roi_data.get("coords", [0, 0, 100, 100])
-    smoothing = request.get("smoothing", 0.0)
-
-    print(f"ROI creation requested: {request}")
-
-    try:
-        # Process video to get frames
-        meta_data = current_video_data
-        frames = meta_data.frames
-        n_frames = frames.shape[0]
-        fps = meta_data.fps
-        time_points = np.arange(n_frames) / fps
-
-        # Extract intensity trace from ROI coordinates
-        x0, y0, x1, y1 = coords
-        height, width = frames.shape[1:]
-
-        # Ensure coordinates are within bounds
-        x0 = int(max(0, min(x0, width - 1)))
-        y0 = int(max(0, min(y0, height - 1)))
-        x1 = int(max(x0 + 1, min(x1, width)))
-        y1 = int(max(y0 + 1, min(y1, height)))
-
-        # Create mask for ROI region
-        mask = np.zeros((height, width), dtype=bool)
-        mask[y0:y1, x0:x1] = True
-
-        # Extract mean intensity for each frame in the ROI
-        intensity_trace = frames[:, mask].mean(axis=1)
-
-        # Apply exponential moving average smoothing if requested
-        if smoothing > 0:
-            from ca2roi.smoothing import smooth_intensity_trace
-
-            intensity_trace = smooth_intensity_trace(intensity_trace, smoothing)
-
-            return JSONResponse(
-                {
-                    "roi_id": roi_id,
-                    "coords": coords,
-                    "intensity_trace": intensity_trace.tolist(),
-                    "time_points": time_points.tolist(),
-                    "message": f"ROI {roi_id} created successfully with {n_frames} frames",
-                }
-            )
-
-    except Exception as e:
-        print(f"Error creating ROI: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create ROI: {str(e)}")
 
 
 @app.post("/api/get-roi-traces")
@@ -501,20 +407,33 @@ async def get_roi_traces(request: dict):
         "smoothing": 0.1
     }
     """
+    print(f"🔍 get_roi_traces called with request: {request}")
+    
     assert_video_selected()
     rois = request.get("rois", [])
     smoothing_factor = request.get("smoothing", 0.0)
 
+    print(f"🔍 Processing {len(rois)} ROIs with smoothing factor: {smoothing_factor}")
+
     if not rois:
+        print("🔍 No ROIs provided, returning empty traces")
         return JSONResponse({"traces": []})
 
     try:
         # Get video data
         meta_data = current_video_data
+        print(f"🔍 Video metadata: {meta_data.info() if meta_data else 'None'}")
+        
+        if not meta_data or meta_data.frames is None or meta_data.frames.size == 0:
+            print("🔍 No video frames available")
+            raise HTTPException(status_code=500, detail="No video frames available")
+        
         frames = meta_data.frames
         n_frames = frames.shape[0]
         fps = meta_data.fps
         time_points = np.arange(n_frames) / fps
+
+        print(f"🔍 Video info: {n_frames} frames, {fps} fps, shape: {frames.shape}")
 
         # Get frame dimensions
         height, width = frames.shape[1:]
@@ -524,7 +443,6 @@ async def get_roi_traces(request: dict):
             roi_id = roi.get("id", 0)
             coords = roi.get("coords", [0, 0, 100, 100])
 
-            # Extract intensity trace from ROI coordinates (same logic as roi-creation)
             x0, y0, x1, y1 = coords
 
             # Ensure coordinates are within bounds
@@ -554,9 +472,13 @@ async def get_roi_traces(request: dict):
                 }
             )
 
+        print(f"🔍 Returning {len(traces)} traces")
         return JSONResponse({"traces": traces})
 
     except Exception as e:
+        print(f"🔍 Error in get_roi_traces: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500, detail=f"Failed to get ROI traces: {str(e)}"
         )

@@ -1,29 +1,10 @@
 import { ref } from 'vue'
-
-export interface ROI {
-  id: number
-  name: string
-  color: string
-  coords: [number, number, number, number]
-  selected: boolean
-  intensityTrace?: number[]
-  timePoints?: number[]
-}
-
-export interface AutoROIConfig {
-  thresholdPercentage: number
-  minDistancePercentage: number
-  nClusters: number
-}
-
-export interface BleachingSettings {
-  adjustBleaching: boolean
-  fitType: 'exponential' | 'inverse'
-  smoothing: number
-}
+import type { ROI, AutoROIConfig, BleachingSettings, Coords } from '../types'
+import { useBackendApi } from './useBackendApi'
 
 export function useROIOperations() {
   const availableROIs = ref<ROI[]>([])
+  const selectedROIs = ref<number[]>([])
   const nextRoiId = ref(1)
   const isAutoROIRunning = ref(false)
 
@@ -40,52 +21,34 @@ export function useROIOperations() {
   ]
 
   const createROI = async (
-    coords: [number, number, number, number],
+    coords: Coords,
     videoPath: string,
     bleachingSettings?: BleachingSettings
-  ): Promise<ROI | null> => {
+  ): Promise<void> => {
     const roiId = nextRoiId.value++
     const roiColor = roiColors[(roiId - 1) % roiColors.length]
 
     try {
-      const response = await fetch('/api/roi-creation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_path: videoPath,
-          roi_data: {
-            id: roiId,
-            coords: coords
-          },
-          adjust_bleaching: bleachingSettings?.adjustBleaching ?? false,
-          fit_type: bleachingSettings?.fitType ?? 'inverse',
-          smoothing: bleachingSettings?.smoothing ?? 0.0
-        })
-      })
+      const { getROITraces } = useBackendApi()
+      const result = await getROITraces(coords, bleachingSettings?.smoothing ?? 0.0)
 
-      if (response.ok) {
-        const result = await response.json()
-        console.log('ROI created:', result)
+      const newROI: ROI = {
+        id: roiId,
+        name: `ROI ${roiId}`,
+        color: roiColor,
+        coords: coords,
+        selected: true,
+        intensityTrace: result.intensity_trace,
+        timePoints: result.time_points
+      }
 
-        const newROI: ROI = {
-          id: roiId,
-          name: `ROI ${roiId}`,
-          color: roiColor,
-          coords: coords,
-          selected: true,
-          intensityTrace: result.intensity_trace,
-          timePoints: result.time_points
-        }
-
-        availableROIs.value.push(newROI)
-        return newROI
+      availableROIs.value.push(newROI)
+      if (newROI.selected && !selectedROIs.value.includes(newROI.id)) {
+        selectedROIs.value.push(newROI.id)
       }
     } catch (error) {
       console.error('Failed to create ROI:', error)
     }
-    return null
   }
 
   const selectROI = async (roiId: number): Promise<boolean> => {
@@ -116,59 +79,16 @@ export function useROIOperations() {
     return false
   }
 
-  const runAutoROI = async (
-    videoPath: string,
-    config: AutoROIConfig
-  ): Promise<ROI[]> => {
-    if (!videoPath) {
-      console.error('No video selected for auto ROI')
-      return []
-    }
-
+  const runAutoROI = async (config: AutoROIConfig): Promise<Coords[]> => {
     isAutoROIRunning.value = true
     console.log('🤖 Running auto ROI detection with config:', config)
 
     try {
-      const response = await fetch('/api/auto-roi', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_path: videoPath,
-          threshold_percentage: config.thresholdPercentage,
-          min_distance_percentage: config.minDistancePercentage,
-          n_clusters: config.nClusters
-        })
-      })
+      const { runAutoROI: apiRunAutoROI } = useBackendApi()
+      const result = await apiRunAutoROI(config)
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const result = await response.json()
-      console.log('Auto ROI completed:', result)
-
-      // Clear existing ROIs and add the new ones
-      availableROIs.value = []
-
-      // Add detected ROIs to the list
-      const newROIs: ROI[] = result.rois.map((roi: { id: number; coords: [number, number, number, number]; avg_intensity: number[] }, index: number) => {
-        const roiColor = roiColors[index % roiColors.length]
-        return {
-          id: roi.id,
-          name: `Auto ROI ${roi.id + 1}`,
-          color: roiColor,
-          coords: roi.coords,
-          selected: true,
-          intensityTrace: roi.avg_intensity,
-          timePoints: Array.from({ length: roi.avg_intensity.length }, (_, i) => i / 30) // Assuming 30 fps
-        }
-      })
-
-      availableROIs.value.push(...newROIs)
-      console.log(`Auto ROI detected ${result.stats.n_rois} regions`)
-      return newROIs
+      console.log(`🎯 Auto ROI detected ${result} regions`)
+      return result
 
     } catch (error) {
       console.error('Auto ROI failed:', error)
@@ -185,6 +105,7 @@ export function useROIOperations() {
 
   return {
     availableROIs,
+    selectedROIs,
     isAutoROIRunning,
     createROI,
     selectROI,

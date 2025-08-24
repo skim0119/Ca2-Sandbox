@@ -11,7 +11,10 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import { type ROI } from '../composables/useROIOperations'
+import type { ROI, BleachingData, MainPlotData } from '../types'
+import { useResizable } from '../composables/useResizable'
+import { useChartConfig } from '../composables/useChartConfig'
+import { useBackendApi } from '../composables/useBackendApi'
 
 ChartJS.register(
   CategoryScale,
@@ -24,55 +27,22 @@ ChartJS.register(
 )
 
 interface Props {
-  bleachingData: {
-    adjustBleaching: boolean
-    smoothing: number
-    fitType: 'exponential' | 'inverse'
-    analysisData?: {
-      time_points: number[]
-      mean_intensity: number[]
-      fit_params: {
-        exponential?: number[]
-        inverse?: number[]
-      }
-      r2_scores: {
-        exponential?: number
-        inverse?: number
-      }
-    }
-    analysisId?: string | null
-    mainPlotData?: {
-      timePoints: number[]
-      datasets: Array<{
-        label: string
-        data: number[]
-        borderColor: string
-        backgroundColor: string
-        tension: number
-      }>
-    } | undefined
-  }
+  bleachingData: BleachingData
   selectedFiles: string[]
   selectedROIs: number[]
   availableROIs: ROI[]
 }
 
 interface Emits {
-  (e: 'bleaching-updated', data: Partial<Props['bleachingData']>): void
-  (e: 'main-plot-updated', data: {
-    timePoints: number[]
-    datasets: Array<{
-      label: string
-      data: number[]
-      borderColor: string
-      backgroundColor: string
-      tension: number
-    }>
-  }): void
+  (e: 'bleaching-updated', data: Partial<BleachingData>): void
+  (e: 'main-plot-updated', data: MainPlotData): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// Use the chart config composable
+const { chartOptions: bleachingChartOptions } = useChartConfig('Bleach line')
 
 // Bleaching plot data
 const bleachingChartData = ref({
@@ -134,90 +104,9 @@ watch(() => props.bleachingData.analysisData, (data) => {
   }
 }, { immediate: true })
 
-const bleachingChartOptions = ref({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top' as const
-    },
-    title: {
-      display: true,
-      text: 'Bleach line'
-    }
-  },
-  scales: {
-    x: {
-      title: {
-        display: true,
-        text: 'Time (seconds)'
-      }
-    },
-    y: {
-      title: {
-        display: true,
-        text: 'Intensity'
-      }
-    }
-  }
-})
-
-// Resizable bleaching plot functionality
-const bleachingPlotHeight = ref(400) // Default height (2x the original ~200px)
-const isBleachingResizing = ref(false)
-const bleachingStartY = ref(0)
-const bleachingStartHeight = ref(0)
-
-const handleBleachingMouseDown = (event: MouseEvent) => {
-  isBleachingResizing.value = true
-  bleachingStartY.value = event.clientY
-  bleachingStartHeight.value = bleachingPlotHeight.value
-  document.addEventListener('mousemove', handleBleachingMouseMove)
-  document.addEventListener('mouseup', handleBleachingMouseUp)
-}
-
-const handleBleachingMouseMove = (event: MouseEvent) => {
-  if (!isBleachingResizing.value) return
-
-  const deltaY = event.clientY - bleachingStartY.value
-  const newHeight = Math.max(200, Math.min(800, bleachingStartHeight.value + deltaY)) // Min 200px, max 800px
-  bleachingPlotHeight.value = newHeight
-}
-
-const handleBleachingMouseUp = () => {
-  isBleachingResizing.value = false
-  document.removeEventListener('mousemove', handleBleachingMouseMove)
-  document.removeEventListener('mouseup', handleBleachingMouseUp)
-}
-
-// Resizable main plot functionality
-const mainPlotHeight = ref(400) // Default height for main plot
-const isMainResizing = ref(false)
-const mainStartY = ref(0)
-const mainStartHeight = ref(0)
-
-const handleMainMouseDown = (event: MouseEvent) => {
-  isMainResizing.value = true
-  mainStartY.value = event.clientY
-  mainStartHeight.value = mainPlotHeight.value
-  document.addEventListener('mousemove', handleMainMouseMove)
-  document.addEventListener('mouseup', handleMainMouseUp)
-}
-
-const handleMainMouseMove = (event: MouseEvent) => {
-  if (!isMainResizing.value) return
-
-  const deltaY = event.clientY - mainStartY.value
-  const newHeight = Math.max(200, Math.min(800, mainStartHeight.value + deltaY)) // Min 200px, max 800px
-  mainPlotHeight.value = newHeight
-}
-
-const handleMainMouseUp = () => {
-  isMainResizing.value = false
-  document.removeEventListener('mousemove', handleMainMouseMove)
-  document.removeEventListener('mouseup', handleMainMouseUp)
-}
+// Use the resizable composable for both plots
+const { height: bleachingPlotHeight, isResizing: isBleachingResizing, handleMouseDown: handleBleachingMouseDown } = useResizable(400, 200, 800)
+const { height: mainPlotHeight, isResizing: isMainResizing, handleMouseDown: handleMainMouseDown } = useResizable(400, 200, 800)
 
 // Main plot data - computed from props
 const mainChartData = computed(() => {
@@ -240,30 +129,8 @@ const mainChartData = computed(() => {
   }
 })
 
-const mainChartOptions = ref({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top' as const
-    }
-  },
-  scales: {
-    x: {
-      title: {
-        display: true,
-        text: 'Time (seconds)'
-      }
-    },
-    y: {
-      title: {
-        display: true,
-        text: 'Intensity'
-      }
-    }
-  }
-})
+// Use the chart config composable for main chart
+const { chartOptions: mainChartOptions } = useChartConfig()
 
 const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
   emit('bleaching-updated', { fitType: type })
@@ -271,20 +138,8 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
   // Send preference to backend if we have an analysis ID
   if (props.bleachingData.analysisId) {
     try {
-      const response = await fetch('/api/update-fit-preference', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          analysis_id: props.bleachingData.analysisId,
-          fit_type: type
-        })
-      })
-
-      if (response.ok) {
-        console.log('✅ Fit preference updated:', type)
-      }
+      const { updateFitPreference } = useBackendApi()
+      await updateFitPreference(props.bleachingData.analysisId, type)
     } catch (error) {
       console.error('❌ Failed to update fit preference:', error)
     }
@@ -298,33 +153,23 @@ const handleGetROITraces = async () => {
   }
 
   try {
+    console.log('📊 Available ROIs:', props.availableROIs)
     console.log('📊 Fetching ROI traces for:', props.selectedROIs)
 
     // Filter available ROIs to get the selected ones with full data
     const selectedROIObjects = props.availableROIs.filter(roi =>
       props.selectedROIs.includes(roi.id)
     )
+    console.log('📊 Selected ROIs:', selectedROIObjects)
 
-    const response = await fetch('/api/get-roi-traces', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        rois: selectedROIObjects.map(roi => ({
-          id: roi.id,
-          coords: roi.coords
-        })),
-        smoothing: props.bleachingData.smoothing
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('✅ ROI traces received:', result)
+    const { getROITraces } = useBackendApi()
+    const result = await getROITraces(
+      selectedROIObjects.map(roi => ({
+        id: roi.id,
+        coords: roi.coords
+      })),
+      props.bleachingData.smoothing
+    )
 
     // Update the main plot data
     if (result.traces && result.traces.length > 0) {

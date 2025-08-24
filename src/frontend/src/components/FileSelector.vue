@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useBackendApi } from '../composables/useBackendApi'
 
 interface Props {
   selectedFiles: string[]
@@ -7,7 +8,6 @@ interface Props {
 
 interface Emits {
   (e: 'files-selected', files: string[]): void
-  (e: 'video-selected', videoPath: string): void
   (e: 'first-frame-received', data: {
     first_frame: string;
     video_info: {
@@ -18,7 +18,7 @@ interface Emits {
       debug_mode?: boolean;
       original_path?: string;
     }
-  }): void
+  } | null): void
 }
 
 const props = defineProps<Props>()
@@ -27,6 +27,7 @@ const emit = defineEmits<Emits>()
 const folderPath = ref<string>('')
 const fileList = ref<string[]>([])
 const selectedVideoPath = ref<string>('')
+const uploadedFiles = ref<File[]>([])
 
 // Video file extensions to highlight
 // const videoExtensions = ['.avi', '.mp4', '.mov', '.mkv', '.wmv', '.flv', '.webm']
@@ -37,11 +38,10 @@ const isVideoFile = (filename: string): boolean => {
   return videoExtensions.includes(extension)
 }
 
-const handleFolderSelect = () => {
+const handleFileSelect = () => {
   // Create a hidden file input element
   const input = document.createElement('input')
   input.type = 'file'
-  input.webkitdirectory = true
   input.multiple = true
   input.accept = '.avi,.mp4,.mov' // Only accept video files
   input.style.display = 'none'
@@ -51,22 +51,18 @@ const handleFolderSelect = () => {
     if (target.files && target.files.length > 0) {
       const files = Array.from(target.files)
 
-      // Get the folder path from the first file
-      const firstFile = files[0]
-      const folderPathParts = firstFile.webkitRelativePath.split('/')
-      folderPathParts.pop() // Remove the filename
-      const folderName = folderPathParts.join('/')
-      folderPath.value = folderName
+      // Filter to only include video files
+      const videoFiles = files.filter(file => isVideoFile(file.name))
+      
+      // Add new files to existing lists (avoid duplicates)
+      videoFiles.forEach(file => {
+        if (!fileList.value.includes(file.name)) {
+          fileList.value.push(file.name)
+          uploadedFiles.value.push(file)
+        }
+      })
 
-      // Filter to only include video files and get their full paths
-      const videoFiles = files
-        .filter(file => isVideoFile(file.name))
-        .map(file => file.webkitRelativePath)
-
-      fileList.value = videoFiles
-
-      // Clean up the input element
-      document.body.removeChild(input)
+      console.log('Files selected:', videoFiles.map(f => ({ name: f.name, size: f.size, type: f.type })))
     }
   }
 
@@ -76,61 +72,100 @@ const handleFolderSelect = () => {
 }
 
 const handleFileToggle = async (filename: string) => {
+  console.log('File toggle called for:', filename)
+  console.log('Available uploaded files:', uploadedFiles.value.map(f => f.name))
+  
   const currentSelection = [...props.selectedFiles]
   const index = currentSelection.indexOf(filename)
 
   if (index > -1) {
+    // If clicking on already selected file, deselect it
     currentSelection.splice(index, 1)
+    selectedVideoPath.value = ''
+    emit('first-frame-received', null)
   } else {
-    currentSelection.push(filename)
+    // If selecting a new file, clear previous selection and select only this one
+    currentSelection.length = 0 // Clear the array
+    currentSelection.push(filename) // Add only the new file
+    selectedVideoPath.value = filename
+    console.log('Single video selected, attempting upload:', filename)
+    
+    try {
+      // Find the actual File object for this filename
+      const file = uploadedFiles.value.find(f => f.name === filename)
+      if (file) {
+        console.log('Found file object:', file.name, file.size, file.type)
+        const result = await uploadAndProcessVideo(file)
+        // Emit the first frame data to parent component
+        emit('first-frame-received', result)
+      } else {
+        console.error('File object not found for filename:', filename)
+      }
+    } catch (error) {
+      console.error('Failed to upload and process video:', error)
+    }
   }
 
   emit('files-selected', currentSelection)
+}
 
-  // If this is a single video selection, automatically send to backend
-  if (currentSelection.length === 1 && isVideoFile(filename)) {
-    selectedVideoPath.value = currentSelection[0]
-    emit('video-selected', currentSelection[0])
-
-    try {
-      const result = await sendVideoToBackend(currentSelection[0])
-      // Emit the first frame data to parent component
-      emit('first-frame-received', result)
-    } catch (error) {
-      console.error('Failed to get first frame:', error)
+const handleRemoveFile = (filename: string, event: Event) => {
+  event.stopPropagation() // Prevent triggering the file toggle
+  
+  console.log('Removing file:', filename)
+  
+  // Remove from file list
+  const fileIndex = fileList.value.indexOf(filename)
+  if (fileIndex > -1) {
+    fileList.value.splice(fileIndex, 1)
+  }
+  
+  // Remove from uploaded files
+  const uploadedIndex = uploadedFiles.value.findIndex(f => f.name === filename)
+  if (uploadedIndex > -1) {
+    uploadedFiles.value.splice(uploadedIndex, 1)
+  }
+  
+  // Remove from selected files if it was selected
+  const currentSelection = [...props.selectedFiles]
+  const selectedIndex = currentSelection.indexOf(filename)
+  if (selectedIndex > -1) {
+    currentSelection.splice(selectedIndex, 1)
+    emit('files-selected', currentSelection)
+    
+    // If no files are selected anymore, clear the video
+    if (currentSelection.length === 0) {
+      selectedVideoPath.value = ''
+      emit('first-frame-received', null)
     }
-  } else {
-    selectedVideoPath.value = ''
   }
 }
 
-const sendVideoToBackend = async (videoPath: string) => {
-  console.log('Attempting to access video at path:', videoPath)
+const handleClearAll = () => {
+  console.log('Clearing all files')
+  
+  // Clear all arrays
+  fileList.value = []
+  uploadedFiles.value = []
+  
+  // Clear selections
+  emit('files-selected', [])
+  selectedVideoPath.value = ''
+  emit('first-frame-received', null)
+}
+
+const uploadAndProcessVideo = async (file: File) => {
+  console.log('Uploading and processing video file:', file.name)
 
   try {
-    console.log('Making API call to /api/initiate-analysis...')
-    const response = await fetch('/api/initiate-analysis', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        video_path: videoPath
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('✅ Video processing successful:', result)
+    const { uploadVideo } = useBackendApi()
+    const result = await uploadVideo(file)
     return result
   } catch (error) {
-    console.error('❌ Error sending video to backend:', error)
+    console.error('❌ Error uploading video to backend:', error)
 
     // Create dummy data for debugging
-    const dummyData = createDummyFrameData(videoPath)
+    const dummyData = createDummyFrameData(file.name)
     console.log('🔄 Using dummy data for debugging:', dummyData)
 
     return dummyData
@@ -181,16 +216,16 @@ const createDummyFrameData = (videoPath: string) => {
   <div class="file-selector">
     <h3>File Selection</h3>
 
-    <!-- Folder Selection -->
-    <div class="folder-section">
-      <button @click="handleFolderSelect" class="select-folder-btn">
-        Browse for video folder
+    <!-- File Selection -->
+    <div class="file-selection-section">
+      <button @click="handleFileSelect" class="select-files-btn">
+        Select video files
       </button>
       <div class="folder-help">
-        Select a folder containing video files.
+        Select one or more video files to upload and process.
       </div>
-      <div v-if="folderPath" class="folder-path">
-        Selected folder: {{ folderPath }}
+      <div v-if="fileList.length > 0" class="file-count">
+        Selected files: {{ fileList.length }} video file(s)
       </div>
     </div>
 
@@ -198,6 +233,14 @@ const createDummyFrameData = (videoPath: string) => {
     <div class="file-list-section">
       <div class="file-list-header">
         <h4>Video files</h4>
+        <button
+          v-if="fileList.length > 0"
+          @click="handleClearAll"
+          class="clear-all-btn"
+          title="Remove all files"
+        >
+          Clear All
+        </button>
       </div>
 
       <div class="file-list">
@@ -218,6 +261,13 @@ const createDummyFrameData = (videoPath: string) => {
             class="file-checkbox"
           />
           <span class="file-name">{{ filename }}</span>
+          <button
+            @click="handleRemoveFile(filename, $event)"
+            class="remove-file-btn"
+            title="Remove file"
+          >
+            ×
+          </button>
         </div>
       </div>
 
@@ -246,11 +296,11 @@ const createDummyFrameData = (videoPath: string) => {
   font-size: 1.2rem;
 }
 
-.folder-section {
+.file-selection-section {
   margin-bottom: 1rem;
 }
 
-.select-folder-btn {
+.select-files-btn {
   width: 100%;
   padding: 0.75rem;
   background-color: #3498db;
@@ -262,7 +312,7 @@ const createDummyFrameData = (videoPath: string) => {
   transition: background-color 0.2s;
 }
 
-.select-folder-btn:hover {
+.select-files-btn:hover {
   background-color: #2980b9;
 }
 
@@ -272,6 +322,18 @@ const createDummyFrameData = (videoPath: string) => {
   color: #666;
   font-style: italic;
   text-align: center;
+}
+
+.file-count {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #28a745;
+  font-weight: 500;
+  text-align: center;
+  background-color: #d4edda;
+  padding: 0.5rem;
+  border-radius: 3px;
+  border: 1px solid #c3e6cb;
 }
 
 .folder-path {
@@ -323,6 +385,21 @@ const createDummyFrameData = (videoPath: string) => {
   background-color: #d5dbdb;
 }
 
+.clear-all-btn {
+  padding: 0.25rem 0.5rem;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: background-color 0.2s;
+}
+
+.clear-all-btn:hover {
+  background-color: #c0392b;
+}
+
 .file-list {
   flex: 1;
   border: 1px solid #ddd;
@@ -369,6 +446,25 @@ const createDummyFrameData = (videoPath: string) => {
   color: #333;
   flex: 1;
   word-break: break-all;
+}
+
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+  line-height: 1;
+}
+
+.remove-file-btn:hover {
+  background-color: #e74c3c;
+  color: white;
 }
 
 .file-legend {

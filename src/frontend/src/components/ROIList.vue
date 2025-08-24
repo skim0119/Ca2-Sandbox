@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-
-interface ROI {
-  id: number
-  name: string
-  color: string
-  coords: [number, number, number, number]
-  selected: boolean
-  intensityTrace?: number[]
-  timePoints?: number[]
-}
+import type { ROI } from '../types'
+import { useResizable } from '../composables/useResizable'
 
 interface Props {
   availableROIs: ROI[]
@@ -23,33 +15,8 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// Resizable ROI table functionality
-const roiTableHeight = ref(200) // Default height
-const isResizing = ref(false)
-const startY = ref(0)
-const startHeight = ref(0)
-
-const handleResizeMouseDown = (event: MouseEvent) => {
-  isResizing.value = true
-  startY.value = event.clientY
-  startHeight.value = roiTableHeight.value
-  document.addEventListener('mousemove', handleResizeMouseMove)
-  document.addEventListener('mouseup', handleResizeMouseUp)
-}
-
-const handleResizeMouseMove = (event: MouseEvent) => {
-  if (!isResizing.value) return
-
-  const deltaY = event.clientY - startY.value
-  const newHeight = Math.max(100, Math.min(400, startHeight.value + deltaY)) // Min 100px, max 400px
-  roiTableHeight.value = newHeight
-}
-
-const handleResizeMouseUp = () => {
-  isResizing.value = false
-  document.removeEventListener('mousemove', handleResizeMouseMove)
-  document.removeEventListener('mouseup', handleResizeMouseUp)
-}
+// Use the resizable composable
+const { height: roiTableHeight, isResizing, handleMouseDown: handleResizeMouseDown } = useResizable(200, 100, 400)
 
 const handleROIToggle = (roiId: number) => {
   emit('roi-toggle', roiId)

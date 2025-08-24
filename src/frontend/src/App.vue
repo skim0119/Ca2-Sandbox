@@ -3,68 +3,29 @@ import { ref, reactive, onMounted } from 'vue'
 import FileSelector from './components/FileSelector.vue'
 import VideoDisplay from './components/VideoDisplay.vue'
 import BleachingCorrection from './components/BleachingCorrection.vue'
-import { type ROI, useROIOperations } from './composables/useROIOperations'
+import { useROIOperations } from './composables/useROIOperations'
+import { useBackendApi } from './composables/useBackendApi'
+import type { ROI, BleachingData, FirstFrameData } from './types'
 
 // Application state
 const selectedFiles = ref<string[]>([])
-const selectedROIs = ref<number[]>([]) // No ROIs selected by default
 
 // ROI operations composable to access available ROIs
-const { availableROIs } = useROIOperations()
+const { availableROIs, selectedROIs } = useROIOperations()
 const backendVersion = ref<string>('...')
-const firstFrameData = ref<{
-  first_frame: string;
-  video_info: {
-    width: number;
-    height: number;
-    fps: number;
-    total_frames: number;
-    debug_mode?: boolean;
-    original_path?: string;
-  }
-} | null>(null)
-const bleachingData = reactive({
+const firstFrameData = ref<FirstFrameData | null>(null)
+const bleachingData = reactive<BleachingData>({
   adjustBleaching: true,
   smoothing: 0.0,
-  fitType: 'inverse' as 'exponential' | 'inverse',
-  analysisData: undefined as {
-    time_points: number[]
-    mean_intensity: number[]
-    fit_params: {
-      exponential?: number[]
-      inverse?: number[]
-    }
-    r2_scores: {
-      exponential?: number
-      inverse?: number
-    }
-  } | undefined,
-  analysisId: null as string | null,
-  mainPlotData: undefined as {
-    timePoints: number[]
-    datasets: Array<{
-      label: string
-      data: number[]
-      borderColor: string
-      backgroundColor: string
-      tension: number
-    }>
-  } | undefined
+  fitType: 'inverse',
+  analysisData: undefined,
+  analysisId: null,
+  mainPlotData: undefined
 })
 
 const fetchBackendVersion = async () => {
-  try {
-    const response = await fetch('/api/version')
-    if (response.ok) {
-      const data = await response.json()
-      backendVersion.value = data.version
-    } else {
-      backendVersion.value = 'dev mode'
-    }
-  } catch {
-    console.log('Backend not available, running in dev mode')
-    backendVersion.value = 'dev mode'
-  }
+  const { getBackendVersion } = useBackendApi()
+  backendVersion.value = await getBackendVersion()
 }
 
 onMounted(() => {
@@ -83,17 +44,7 @@ const handleBleachingUpdate = (data: Partial<typeof bleachingData>) => {
   Object.assign(bleachingData, data)
 }
 
-const handleFirstFrameReceived = (data: {
-  first_frame: string;
-  video_info: {
-    width: number;
-    height: number;
-    fps: number;
-    total_frames: number;
-    debug_mode?: boolean;
-    original_path?: string;
-  }
-}) => {
+const handleFirstFrameReceived = (data: FirstFrameData | null) => {
   firstFrameData.value = data
 }
 
@@ -106,22 +57,8 @@ const handleRunAnalysis = async () => {
   console.log('Analysis requested for video:', selectedFiles.value[0])
 
   try {
-    const response = await fetch('/api/run-analysis', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        video_path: selectedFiles.value[0]
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    console.log('Analysis completed:', result)
+    const { runAnalysis } = useBackendApi()
+    const result = await runAnalysis(selectedFiles.value[0])
 
     // Pass the analysis data to the bleaching correction component
     bleachingData.analysisData = result.bleaching_data
@@ -135,39 +72,10 @@ const handleRunAnalysis = async () => {
   }
 }
 
-const handleMainPlotUpdate = (mainPlotData: {
-  timePoints: number[]
-  datasets: Array<{
-    label: string
-    data: number[]
-    borderColor: string
-    backgroundColor: string
-    tension: number
-  }>
-}) => {
-  console.log('Main plot updated from button:', mainPlotData)
+const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
+  console.log('📊 Main plot updated from button:', mainPlotData)
   bleachingData.mainPlotData = mainPlotData
 }
-
-const handleROICreated = (roi: ROI) => {
-  console.log('ROI created:', roi)
-  // Add the new ROI to the selected ROIs list since it's created as selected: true
-  if (roi.selected && !selectedROIs.value.includes(roi.id)) {
-    selectedROIs.value.push(roi.id)
-  }
-}
-
-const handleROIUpdated = (roi: ROI) => {
-  console.log('ROI updated:', roi)
-  // Update the selected ROIs list based on the ROI's selected state
-  const index = selectedROIs.value.indexOf(roi.id)
-  if (roi.selected && index === -1) {
-    selectedROIs.value.push(roi.id)
-  } else if (!roi.selected && index !== -1) {
-    selectedROIs.value.splice(index, 1)
-  }
-}
-
 
 
 const createDummyAnalysisData = () => {  // Deprecated:: Consider removing
@@ -226,8 +134,6 @@ const createDummyAnalysisData = () => {  // Deprecated:: Consider removing
             }"
             @rois-selected="handleROISelection"
             @run-analysis="handleRunAnalysis"
-            @roi-created="handleROICreated"
-            @roi-updated="handleROIUpdated"
           />
         </div>
 

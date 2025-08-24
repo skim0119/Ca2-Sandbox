@@ -4,7 +4,7 @@ import numpy as np
 
 import click
 
-from ca2roi.video import process_video
+from ca2roi.video import load_video_from_path
 from ca2roi.roi import handle_rois, extract_and_save_traces
 from ca2roi.bleaching import (
     compute_bleaching,
@@ -79,7 +79,7 @@ def main(
     bleach_csv_path = os.path.join(workspace, f"bleaching_trend.csv")
     overlay_img_path = os.path.join(workspace, f"fluctuation_overlay.pdf")
 
-    meta_data = process_video(video_path)
+    meta_data = load_video_from_path(video_path)
     frames = meta_data.frames
     info = meta_data.info()
     mean_intensity = compute_bleaching(frames)
