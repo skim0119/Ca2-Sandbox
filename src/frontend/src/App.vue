@@ -6,7 +6,7 @@ import BleachingCorrection from './components/BleachingCorrection.vue'
 import IntensityTracingPlot from './components/IntensityTracingPlot.vue'
 import { useROIOperations } from './composables/useROIOperations'
 import { useBackendApi } from './composables/useBackendApi'
-import type { BleachingData, FirstFrameData } from './types'
+import type { BleachingData, FirstFrameData, TracingPlotData } from './types'
 
 // Application state
 const selectedFiles = ref<string[]>([])
@@ -21,8 +21,8 @@ const bleachingData = reactive<BleachingData>({
   fitType: 'inverse',
   analysisData: undefined,
   analysisId: null,
-  mainPlotData: undefined
 })
+const intensityTracingPlotData = ref<TracingPlotData | null>(null)
 
 const fetchBackendVersion = async () => {
   const { getBackendVersion } = useBackendApi()
@@ -71,11 +71,10 @@ const handleRunAnalysis = async () => {
   }
 }
 
-const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
-  console.log('📊 Main plot updated from button:', mainPlotData)
-  bleachingData.mainPlotData = mainPlotData
+const handleTracingPlotUpdate = (tracingPlotData: TracingPlotData) => {
+  console.log('Tracing plot updated:', tracingPlotData)
+  intensityTracingPlotData.value = tracingPlotData
 }
-
 
 </script>
 
@@ -116,17 +115,21 @@ const handleMainPlotUpdate = (mainPlotData: BleachingData['mainPlotData']) => {
       <div class="column bleaching-correction">
         <BleachingCorrection
           :bleaching-data="bleachingData"
-          :selected-files="selectedFiles"
-          :selected-r-o-is="selectedROIs"
-          :available-r-o-is="availableROIs"
           @bleaching-updated="handleBleachingUpdate"
-          @main-plot-updated="handleMainPlotUpdate"
         />
       </div>
 
       <!-- Fourth Column: Intensity Tracing Plot -->
       <div class="column intensity-tracing-plot">
-        <IntensityTracingPlot :main-plot-data="bleachingData.mainPlotData || null" />
+        <IntensityTracingPlot
+          :tracing-plot-data="intensityTracingPlotData || null"
+          :selected-files="selectedFiles"
+          :selected-r-o-is="selectedROIs"
+          :available-r-o-is="availableROIs"
+          :bleaching-data="bleachingData"
+          @tracing-plot-updated="handleTracingPlotUpdate"
+          @bleaching-updated="handleBleachingUpdate"
+        />
       </div>
     </main>
   </div>

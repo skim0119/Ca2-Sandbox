@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import type { ROI, BleachingData, MainPlotData } from '../types'
+import type { BleachingData } from '../types'
 import { useResizable } from '../composables/useResizable'
 import { useChartConfig } from '../composables/useChartConfig'
 import { useBackendApi } from '../composables/useBackendApi'
@@ -28,14 +28,10 @@ ChartJS.register(
 
 interface Props {
   bleachingData: BleachingData
-  selectedFiles: string[]
-  selectedROIs: number[]
-  availableROIs: ROI[]
 }
 
 interface Emits {
   (e: 'bleaching-updated', data: Partial<BleachingData>): void
-  (e: 'main-plot-updated', data: MainPlotData): void
 }
 
 const props = defineProps<Props>()
@@ -123,21 +119,7 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
 
 
 
-const handleAdjustBleachingChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  emit('bleaching-updated', { adjustBleaching: target.checked })
-}
 
-const handleSmoothingChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  emit('bleaching-updated', { smoothing: parseFloat(target.value) })
-}
-
-const handleSaveToCSV = () => {
-  // In a real implementation, this would export the data
-  console.log('Saving to CSV...')
-  alert('Data saved to CSV (simulated)')
-}
 </script>
 
 <template>
@@ -188,39 +170,7 @@ const handleSaveToCSV = () => {
       </div>
     </div>
 
-    <!-- Adjust Bleaching and Controls -->
-    <div class="adjustment-section">
-      <div class="adjustment-controls">
-        <div class="adjustment-option">
-          <input
-            type="checkbox"
-            id="adjust-bleaching"
-            :checked="props.bleachingData.adjustBleaching"
-            @change="handleAdjustBleachingChange"
-          />
-          <label for="adjust-bleaching">adjust bleaching</label>
-        </div>
 
-        <div class="smoothing-control">
-          <label for="smoothing-slider">smoothing</label>
-          <input
-            type="range"
-            id="smoothing-slider"
-            min="0"
-            max="1"
-            step="0.1"
-            :value="props.bleachingData.smoothing"
-            @input="handleSmoothingChange"
-            class="smoothing-slider"
-          />
-          <span class="smoothing-value">{{ props.bleachingData.smoothing }}</span>
-        </div>
-
-        <button @click="handleSaveToCSV" class="save-btn">
-          save to CSV
-        </button>
-      </div>
-    </div>
 
   </div>
 </template>
@@ -335,97 +285,7 @@ const handleSaveToCSV = () => {
   color: #333;
 }
 
-.adjustment-section {
-  flex: 0 0 auto;
-}
 
-.adjustment-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.adjustment-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.adjustment-option input[type="checkbox"] {
-  margin: 0;
-}
-
-.adjustment-option label {
-  cursor: pointer;
-  color: #333;
-}
-
-.smoothing-control {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.smoothing-control label {
-  min-width: 60px;
-  color: #333;
-}
-
-.smoothing-slider {
-  flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: #ddd;
-  outline: none;
-  -webkit-appearance: none;
-}
-
-.smoothing-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #3498db;
-  cursor: pointer;
-}
-
-.smoothing-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #3498db;
-  cursor: pointer;
-  border: none;
-}
-
-.smoothing-value {
-  min-width: 30px;
-  text-align: right;
-  font-weight: bold;
-  color: #3498db;
-}
-
-.save-btn {
-  padding: 0.5rem 1rem;
-  background-color: #27ae60;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background-color 0.2s;
-}
-
-.save-btn:hover {
-  background-color: #229954;
-}
 
 
 

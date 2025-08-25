@@ -60,16 +60,15 @@ export interface ChartDataset {
   tension: number
 }
 
-export interface MainPlotData {
-  timePoints: number[]
-  datasets: ChartDataset[]
-}
-
 export interface BleachingData {
   adjustBleaching: boolean
   smoothing: number
   fitType: 'exponential' | 'inverse'
   analysisData?: AnalysisData
   analysisId?: string | null
-  mainPlotData?: MainPlotData
+}
+
+export interface TracingPlotData {
+  timePoints: number[]
+  datasets: ChartDataset[]
 }
