@@ -6,6 +6,8 @@ The package is developed to provide light-weight and easy-to-use tools for calci
 Data can be saved in csv format for further analysis.
 (Please note in [issue](https://github.com/skim0119/CA2-Sandbox/issues) if you have desired format other than csv).
 
+![MiV-Ca2 Intensity Analysis Toolbox](assets-readme/v051.png)
+
 ## Easy installation
 
 `pip install ca2roi`
