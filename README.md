@@ -21,6 +21,10 @@ Data can be saved in csv format for further analysis.
 
 links to [local](http://localhost:8000) by default.
 
+---
+
+> Below is for "slightly" more advanced usage, like batch parallel processing or using experimental tools that does not have GUI interface yet.
+
 ## CLI usage (for batch processing)
 
 ```
