@@ -1,13 +1,22 @@
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import type { ROI, AutoROIConfig, BleachingSettings, Coords } from '../types'
-import { useBackendApi } from './useBackendApi'
+import { useBackendApi } from './useBackendApi.ts'
 
-export function useROIOperations() {
+export function useROIState() {
   const availableROIs = ref<ROI[]>([])
   const selectedROIs = ref<number[]>([])
-  const nextRoiId = ref(1)
   const isAutoROIRunning = ref(false)
 
+  return {
+    availableROIs,
+    selectedROIs,
+    isAutoROIRunning,
+  }
+}
+
+export function useROIOperations(availableROIs: Ref<ROI[]>, selectedROIs: Ref<number[]>, isAutoROIRunning: Ref<boolean>) {
+  const nextRoiId = ref(1)
   // ROI colors for different regions
   const roiColors = [
     '#FF6B6B', // Red
@@ -39,13 +48,13 @@ export function useROIOperations() {
         name: `ROI ${roiId}`,
         color: roiColor,
         coords: coords,
-        selected: true,
         intensityTrace: result[0].intensityTrace,
       }
 
       availableROIs.value.push(newROI)
-      if (newROI.selected && !selectedROIs.value.includes(newROI.id)) {
-        selectedROIs.value.push(newROI.id)
+      console.log('🔄 ROI created:', availableROIs.value)
+      if (!selectedROIs.value.includes(roiId)) {
+        selectedROIs.value.push(roiId)
       }
     } catch (error) {
       console.error('Failed to create ROI:', error)
@@ -56,11 +65,12 @@ export function useROIOperations() {
     const roi = availableROIs.value.find(r => r.id === roiId)
     if (!roi) return false
 
-    // Update ROI in list locally (no backend call needed)
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
-      availableROIs.value[roiIndex].selected = true
-      console.log('ROI selected:', roiId)
+      // Add this line to sync the arrays:
+      if (!selectedROIs.value.includes(roiId)) {
+        selectedROIs.value.push(roiId)
+      }
       return true
     }
     return false
@@ -70,11 +80,12 @@ export function useROIOperations() {
     const roi = availableROIs.value.find(r => r.id === roiId)
     if (!roi) return false
 
-    // Update ROI in list locally (no backend call needed)
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
-      availableROIs.value[roiIndex].selected = false
-      console.log('ROI unselected:', roiId)
+      const index = selectedROIs.value.indexOf(roiId)
+      if (index > -1) {
+        selectedROIs.value.splice(index, 1)
+      }
       return true
     }
     return false
@@ -101,13 +112,11 @@ export function useROIOperations() {
 
   const clearROIs = () => {
     availableROIs.value = []
+    selectedROIs.value = []
     nextRoiId.value = 1
   }
 
   return {
-    availableROIs,
-    selectedROIs,
-    isAutoROIRunning,
     createROI,
     selectROI,
     unselectROI,

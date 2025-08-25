@@ -38,7 +38,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Use the chart config composable
-const { chartOptions: bleachingChartOptions } = useChartConfig('Bleach line')
+const { chartOptions: bleachingChartOptions } = useChartConfig('Photobleaching trend')
 
 // Bleaching plot data
 const bleachingChartData = ref({
@@ -54,49 +54,51 @@ const bleachingChartData = ref({
 
 // Watch for analysis data and update chart
 watch(() => props.bleachingData.analysisData, (data) => {
-  if (data) {
-    console.log('📊 Updating bleaching chart with analysis data')
+  if (!data) {
+    console.log('Bleaching Correction:: No analysis data available')
+    return
+  }
+  console.log('Bleaching Correction:: Updating bleaching chart with analysis data')
 
-    // Update chart with real data
-    bleachingChartData.value = {
-      labels: data.timePoints,
-      datasets: [
-        {
-          label: 'Raw Data',
-          data: data.meanIntensity,
-          borderColor: '#e74c3c',
-          backgroundColor: 'rgba(231, 76, 60, 0.1)',
-          tension: 0.1
-        }
-      ]
-    }
-
-        // Add fitted curves if available
-    if (data.fitParams && data.fitParams.exponential) {
-      const expParams = data.fitParams.exponential
-      const expData = data.timePoints.map((t: number) => expParams[0] * Math.exp(-t / expParams[1]))
-      const r2Exp = data.r2Scores.exponential?.toFixed(3) || 'N/A'
-      bleachingChartData.value.datasets.push({
-        label: `Exponential Fit (R² = ${r2Exp})`,
-        data: expData,
-        borderColor: '#f39c12',
-        backgroundColor: 'rgba(243, 156, 18, 0.1)',
+  // Update chart with real data
+  bleachingChartData.value = {
+    labels: data.timePoints,
+    datasets: [
+      {
+        label: 'Raw Data',
+        data: data.meanIntensity,
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231, 76, 60, 0.1)',
         tension: 0.1
-      })
-    }
+      }
+    ]
+  }
 
-    if (data.fitParams && data.fitParams.inverse) {
-      const invParams = data.fitParams.inverse
-      const invData = data.timePoints.map((t: number) => invParams[0] / (1 + t / invParams[1]))
-      const r2Inv = data.r2Scores.inverse?.toFixed(3) || 'N/A'
-      bleachingChartData.value.datasets.push({
-        label: `Inverse Fit (R² = ${r2Inv})`,
-        data: invData,
-        borderColor: '#27ae60',
-        backgroundColor: 'rgba(39, 174, 96, 0.1)',
-        tension: 0.1
-      })
-    }
+  // Add fitted curves if available
+  if (data.fitParams && data.fitParams.exponential) {
+    const expParams = data.fitParams.exponential
+    const expData = data.timePoints.map((t: number) => expParams[0] * Math.exp(-t / expParams[1]))
+    const r2Exp = data.r2Scores.exponential?.toFixed(3) || 'N/A'
+    bleachingChartData.value.datasets.push({
+      label: `Exponential Fit (R² = ${r2Exp})`,
+      data: expData,
+      borderColor: '#f39c12',
+      backgroundColor: 'rgba(243, 156, 18, 0.1)',
+      tension: 0.1
+    })
+  }
+
+  if (data.fitParams && data.fitParams.inverse) {
+    const invParams = data.fitParams.inverse
+    const invData = data.timePoints.map((t: number) => invParams[0] / (1 + t / invParams[1]))
+    const r2Inv = data.r2Scores.inverse?.toFixed(3) || 'N/A'
+    bleachingChartData.value.datasets.push({
+      label: `Inverse Fit (R² = ${r2Inv})`,
+      data: invData,
+      borderColor: '#27ae60',
+      backgroundColor: 'rgba(39, 174, 96, 0.1)',
+      tension: 0.1
+    })
   }
 }, { immediate: true })
 
@@ -128,6 +130,7 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
     <div class="bleaching-plot-section">
       <h3>Bleaching Analysis</h3>
 
+      <!-- Bleaching Plot -->
       <div class="plot-container" :style="{ height: bleachingPlotHeight + 'px' }">
         <div v-if="bleachingChartData.datasets.length === 0" class="empty-state">
           <div class="empty-message">No bleaching data available</div>
@@ -148,6 +151,7 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
         </div>
       </div>
 
+    <!-- Fit Options -->
       <div class="fit-options">
         <div class="fit-option">
           <input
@@ -168,9 +172,8 @@ const handleFitTypeChange = async (type: 'exponential' | 'inverse') => {
           <label for="inverse-fit">inverse fit (default)</label>
         </div>
       </div>
+
     </div>
-
-
 
   </div>
 </template>

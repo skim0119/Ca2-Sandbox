@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import type { TracingPlotData, ROI } from '../types'
+import type { ROI } from '../types'
 import { useResizable } from '../composables/useResizable'
 import { useChartConfig } from '../composables/useChartConfig'
 import { useBackendApi } from '../composables/useBackendApi'
@@ -27,7 +27,6 @@ ChartJS.register(
 )
 
 interface Props {
-  tracingPlotData: TracingPlotData | null
   selectedFiles: string[]
   selectedROIs: number[]
   availableROIs: ROI[]
@@ -41,36 +40,62 @@ interface Props {
 }
 
 interface Emits {
-  (e: 'tracing-plot-updated', data: TracingPlotData): void
   (e: 'bleaching-updated', data: { adjustBleaching?: boolean; smoothing?: number }): void
 }
 
-const emit = defineEmits<Emits>()
 const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
 
 // Use the resizable composable for main plot
 const { height: mainPlotHeight, isResizing: isMainResizing, handleMouseDown: handleMainMouseDown } = useResizable(400, 200, 800)
 
-// Main plot data - computed from props
-const mainChartData = computed(() => {
-  if (!props.tracingPlotData) {
-    return {
-      labels: [] as number[],
-      datasets: [] as Array<{
-        label: string
-        data: number[]
-        borderColor: string
-        backgroundColor: string
-        tension: number
-      }>
+// Main plotting data
+const mainChartData = ref({
+  labels: [] as number[],
+  datasets: [] as Array<{
+    label: string
+    data: number[]
+    borderColor: string
+    backgroundColor: string
+    tension: number
+  }>
+})
+
+
+watch(() => props.selectedROIs, (data) => {
+  if (!data){
+    console.log('Intensity Tracing Plot:: No ROIs selected')
+    // empty the mainChartData
+    mainChartData.value = {
+      labels: [],
+      datasets: []
     }
+    return
   }
 
-  return {
-    labels: props.tracingPlotData.timePoints || [],
-    datasets: props.tracingPlotData.datasets || []
+  console.log('Intensity Tracing Plot:: Selected ROIs changed:', data)
+  console.log('Intensity Tracing Plot:: Available ROIs:', props.availableROIs)
+
+  const plottingROIs: ROI[] = props.availableROIs.filter(roi => data.includes(roi.id))
+  const maxLength: number = plottingROIs.length
+  console.log('Intensity Tracing Plot:: Max length:', maxLength)
+
+  // const labels = [...Array(maxLength).keys()]
+  const labels = Array.from({ length: maxLength }, (_, i) => i)
+  console.log('Intensity Tracing Plot:: Labels:', labels)
+
+  mainChartData.value = {
+    labels: labels,
+    datasets: [{
+      label: 'temporary',
+      data: labels,
+      borderColor: '#ccc',
+      backgroundColor: '#f0f0f0',
+      tension: 0.1
+    }]
   }
-})
+}, { immediate: true }
+)
 
 // Use the chart config composable for main chart
 const { chartOptions: mainChartOptions } = useChartConfig()
@@ -106,20 +131,18 @@ const updateROITraces = async () => {
     })
 
     // Update the main plot data
-    if (result && result.length > 0) {
-      const tracingPlotData = {
-        timePoints: props.bleachingData.analysisData?.timePoints || [],
-        datasets: result.map((trace: { roiId: number; intensityTrace: number[] }, index: number) => ({
-          label: `ROI ${trace.roiId}`,
-          data: trace.intensityTrace,
-          borderColor: `hsl(${index * 60}, 70%, 50%)`,
-          backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
-          tension: 0.1
-        }))
-      }
-
-      emit('tracing-plot-updated', tracingPlotData)
-    }
+    // if (result && result.length > 0) {
+    //   mainChartData.value = {
+    //     labels: result.map((trace: { timePoints: number[] }) => trace.timePoints),
+    //     datasets: result.map((trace: { roiId: number; intensityTrace: number[] }, index: number) => ({
+    //       label: `ROI ${trace.roiId}`,
+    //       data: trace.intensityTrace,
+    //       borderColor: `hsl(${index * 60}, 70%, 50%)`,
+    //       backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.1)`,
+    //       tension: 0.1
+    //     }))
+    //   }
+    // }
 
   } catch (error) {
     console.error('Failed to fetch ROI traces:', error)
@@ -137,7 +160,7 @@ const handleSmoothingChange = (event: Event) => {
 }
 
 const handleSaveToCSV = () => {
-  // In a real implementation, this would export the data
+  // TODO: In a real implementation, this would export the data
   console.log('Saving to CSV...')
   alert('Data saved to CSV (simulated)')
 }
@@ -150,26 +173,6 @@ const handleSaveToCSV = () => {
     <div class="main-plot-header">
       <h3>Intensity Tracing Plot</h3>
     </div>
-    <div class="plot-container" :style="{ height: mainPlotHeight + 'px' }">
-      <div v-if="mainChartData.datasets.length === 0" class="empty-state">
-        <div class="empty-message">No plot data available</div>
-        <div class="empty-hint">Click 'Get ROI Traces' to see intensity traces</div>
-      </div>
-      <Line
-        v-else
-        :data="mainChartData"
-        :options="mainChartOptions"
-        class="main-chart"
-      />
-      <div
-        class="resize-handle"
-        @mousedown="handleMainMouseDown"
-        :class="{ 'resizing': isMainResizing }"
-      >
-        <div class="resize-indicator">⋮⋮</div>
-      </div>
-    </div>
-
     <!-- Adjust Bleaching and Controls -->
     <div class="adjustment-section">
       <div class="adjustment-controls">
@@ -203,6 +206,28 @@ const handleSaveToCSV = () => {
         </button>
       </div>
     </div>
+
+    <!-- Intensity Plot -->
+    <div class="plot-container" :style="{ height: mainPlotHeight + 'px' }">
+      <div v-if="mainChartData.datasets.length === 0" class="empty-state">
+        <div class="empty-message">No plot data available</div>
+        <div class="empty-hint">Click 'Get ROI Traces' to see intensity traces</div>
+      </div>
+      <Line
+        v-else
+        :data="mainChartData"
+        :options="mainChartOptions"
+        class="main-chart"
+      />
+      <div
+        class="resize-handle"
+        @mousedown="handleMainMouseDown"
+        :class="{ 'resizing': isMainResizing }"
+      >
+        <div class="resize-indicator">⋮⋮</div>
+      </div>
+    </div>
+
   </div>
 </template>
 

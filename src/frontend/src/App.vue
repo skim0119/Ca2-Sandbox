@@ -4,15 +4,15 @@ import FileSelector from './components/FileSelector.vue'
 import VideoDisplay from './components/VideoDisplay.vue'
 import BleachingCorrection from './components/BleachingCorrection.vue'
 import IntensityTracingPlot from './components/IntensityTracingPlot.vue'
-import { useROIOperations } from './composables/useROIOperations'
+import { useROIState } from './composables/useROI'
 import { useBackendApi } from './composables/useBackendApi'
-import type { BleachingData, FirstFrameData, TracingPlotData } from './types'
+import type { BleachingData, FirstFrameData } from './types'
 
 // Application state
 const selectedFiles = ref<string[]>([])
 
 // ROI operations composable to access available ROIs
-const { availableROIs, selectedROIs } = useROIOperations()
+const { availableROIs, selectedROIs, isAutoROIRunning } = useROIState()
 const backendVersion = ref<string>('...')
 const firstFrameData = ref<FirstFrameData | null>(null)
 const bleachingData = reactive<BleachingData>({
@@ -22,7 +22,6 @@ const bleachingData = reactive<BleachingData>({
   analysisData: undefined,
   analysisId: null,
 })
-const intensityTracingPlotData = ref<TracingPlotData | null>(null)
 
 const fetchBackendVersion = async () => {
   const { getBackendVersion } = useBackendApi()
@@ -71,11 +70,6 @@ const handleRunAnalysis = async () => {
   }
 }
 
-const handleTracingPlotUpdate = (tracingPlotData: TracingPlotData) => {
-  console.log('Tracing plot updated:', tracingPlotData)
-  intensityTracingPlotData.value = tracingPlotData
-}
-
 </script>
 
 <template>
@@ -95,21 +89,23 @@ const handleTracingPlotUpdate = (tracingPlotData: TracingPlotData) => {
         />
       </div>
 
-              <!-- Middle Column: Video Display and ROI Management -->
-        <div class="column video-display">
-          <VideoDisplay
-            :selected-files="selectedFiles"
-            :selectedROIs="selectedROIs"
-            :first-frame-data="firstFrameData"
-            :bleaching-settings="{
-              adjustBleaching: bleachingData.adjustBleaching,
-              fitType: bleachingData.fitType,
-              smoothing: bleachingData.smoothing
-            }"
-            @rois-selected="handleROISelection"
-            @run-analysis="handleRunAnalysis"
-          />
-        </div>
+      <!-- Middle Column: Video Display and ROI Management -->
+      <div class="column video-display">
+        <VideoDisplay
+          :selected-files="selectedFiles"
+          :selectedROIs="selectedROIs"
+          :availableROIs="availableROIs"
+          :isAutoROIRunning="isAutoROIRunning"
+          :first-frame-data="firstFrameData"
+          :bleaching-settings="{
+            adjustBleaching: bleachingData.adjustBleaching,
+            fitType: bleachingData.fitType,
+            smoothing: bleachingData.smoothing
+          }"
+          @rois-selected="handleROISelection"
+          @run-analysis="handleRunAnalysis"
+        />
+      </div>
 
       <!-- Right Column: Bleaching Correction -->
       <div class="column bleaching-correction">
@@ -122,12 +118,10 @@ const handleTracingPlotUpdate = (tracingPlotData: TracingPlotData) => {
       <!-- Fourth Column: Intensity Tracing Plot -->
       <div class="column intensity-tracing-plot">
         <IntensityTracingPlot
-          :tracing-plot-data="intensityTracingPlotData || null"
           :selected-files="selectedFiles"
-          :selected-r-o-is="selectedROIs"
-          :available-r-o-is="availableROIs"
+          :selectedROIs="selectedROIs"
+          :availableROIs="availableROIs"
           :bleaching-data="bleachingData"
-          @tracing-plot-updated="handleTracingPlotUpdate"
           @bleaching-updated="handleBleachingUpdate"
         />
       </div>

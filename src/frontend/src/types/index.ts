@@ -10,7 +10,6 @@ export interface ROI {
   name: string
   color: string
   coords: Coords
-  selected: boolean
   intensityTrace?: number[]
 }
 
@@ -68,7 +67,3 @@ export interface BleachingData {
   analysisId?: string | null
 }
 
-export interface TracingPlotData {
-  timePoints: number[]
-  datasets: ChartDataset[]
-}

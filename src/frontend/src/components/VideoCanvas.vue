@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import type { FirstFrameData, Coords } from '../types'
+import type { FirstFrameData, Coords, ROI } from '../types'
 
 interface Props {
   firstFrameData?: FirstFrameData | null
-  availableROIs: Array<{
-    id: number
-    name: string
-    color: string
-    coords: Coords
-    selected: boolean
-  }>
+  availableROIs: ROI[]
 }
 
 interface Emits {
@@ -159,7 +153,6 @@ onUnmounted(() => {
           v-for="roi in availableROIs"
           :key="roi.id"
           class="roi-box"
-          :class="{ 'selected': roi.selected }"
           :style="{
             left: roi.coords.x0 + 'px',
             top: roi.coords.y0 + 'px',
@@ -235,11 +228,6 @@ onUnmounted(() => {
   background-color: rgba(255, 255, 255, 0.1);
   pointer-events: none;
   transition: all 0.2s ease;
-}
-
-.roi-box.selected {
-  border-width: 3px;
-  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .roi-label {

@@ -3,12 +3,14 @@ import { ref, watch } from 'vue'
 import VideoCanvas from './VideoCanvas.vue'
 import ROIList from './ROIList.vue'
 import AutoROIConfig from './AutoROIConfig.vue'
-import { useROIOperations } from '../composables/useROIOperations'
-import type { AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings, Coords } from '../types'
+import { useROIOperations } from '../composables/useROI.ts'
+import type { AutoROIConfig as AutoROIConfigType, FirstFrameData, BleachingSettings, Coords, ROI } from '../types'
 
 interface Props {
   selectedFiles: string[]
   selectedROIs: number[]
+  availableROIs: ROI[]
+  isAutoROIRunning: boolean
   firstFrameData?: FirstFrameData | null
   bleachingSettings?: BleachingSettings
 }
@@ -25,13 +27,12 @@ const currentVideo = ref<string>('')
 
 // Use the ROI operations composable
 const {
-  availableROIs,
-  isAutoROIRunning,
   createROI,
   selectROI,
   unselectROI,
-  runAutoROI
-} = useROIOperations()
+  runAutoROI,
+  clearROIs
+} = useROIOperations(ref(props.availableROIs), ref(props.selectedROIs), ref(props.isAutoROIRunning))
 
 // Auto ROI configuration
 const autoROIConfig = ref<AutoROIConfigType>({
@@ -75,6 +76,12 @@ const handleRunAnalysis = () => {
   emit('run-analysis')
 }
 
+const handleClearROIs = () => {
+  console.log('Clearing all ROIs')
+  clearROIs()
+  emit('rois-selected', [])
+}
+
 // Watch for selected files to update current video name
 watch(() => props.selectedFiles, (files) => {
   if (files.length > 0) {
@@ -102,7 +109,7 @@ watch(() => props.selectedFiles, (files) => {
 
       <VideoCanvas
         :first-frame-data="props.firstFrameData"
-        :available-r-o-is="availableROIs"
+        :availableROIs="availableROIs"
         @roi-drawn="handleROIDrawn"
       />
 
@@ -115,13 +122,20 @@ watch(() => props.selectedFiles, (files) => {
     <div class="roi-section">
       <div class="roi-header">
         <h3>Regions of Interest</h3>
+        <button
+          @click="handleClearROIs"
+          class="clear-rois-btn"
+          :disabled="availableROIs.length === 0"
+        >
+          Clear ROIs
+        </button>
       </div>
 
       <div class="roi-content">
         <!-- ROI List -->
         <ROIList
-          :available-r-o-is="availableROIs"
-          :selected-r-o-is="props.selectedROIs"
+          :availableROIs="availableROIs"
+          :selectedROIs="props.selectedROIs"
           @roi-toggle="handleROIToggle"
         />
 
@@ -233,6 +247,29 @@ watch(() => props.selectedFiles, (files) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
+}
+
+.clear-rois-btn {
+  padding: 0.5rem 1rem;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.clear-rois-btn:hover:not(:disabled) {
+  background-color: #c0392b;
+  transform: translateY(-1px);
+}
+
+.clear-rois-btn:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .roi-content {

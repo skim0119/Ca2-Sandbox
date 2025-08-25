@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { ROI } from '../types'
 import { useResizable } from '../composables/useResizable'
 
@@ -21,6 +20,15 @@ const { height: roiTableHeight, isResizing, handleMouseDown: handleResizeMouseDo
 const handleROIToggle = (roiId: number) => {
   emit('roi-toggle', roiId)
 }
+
+const handleCheckboxChange = (roiId: number, event: Event) => {
+  event.stopPropagation() // Prevent the click event from firing twice
+  emit('roi-toggle', roiId)
+}
+
+const isROISelected = (roiId: number): boolean => {
+  return props.selectedROIs.includes(roiId)
+}
 </script>
 
 <template>
@@ -34,16 +42,14 @@ const handleROIToggle = (roiId: number) => {
         v-else
         v-for="roi in availableROIs"
         :key="roi.id"
-        :class="[
-          'roi-item',
-          { 'selected': roi.selected }
-        ]"
+        class="roi-item"
+        :class="{ 'selected': isROISelected(roi.id) }"
         @click="handleROIToggle(roi.id)"
       >
         <input
           type="checkbox"
-          :checked="roi.selected"
-          @change="handleROIToggle(roi.id)"
+          :checked="isROISelected(roi.id)"
+          @change="handleCheckboxChange(roi.id, $event)"
           class="roi-checkbox"
         />
         <div
@@ -126,6 +132,11 @@ const handleROIToggle = (roiId: number) => {
 
 .roi-item.selected {
   background-color: #e3f2fd;
+  border-left: 3px solid #2196f3;
+}
+
+.roi-item.selected:hover {
+  background-color: #bbdefb;
 }
 
 .roi-checkbox {
