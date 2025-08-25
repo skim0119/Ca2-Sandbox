@@ -18,7 +18,7 @@ install-frontend:
 # Build Python package with uv into distributed version
 build: install
 	@echo "Building Python package..."
-	uv build
+	uv build --wheel
 	@echo "Python package build complete!"
 
 # Clean all cache or unnecessary files/folders recursively
@@ -44,6 +44,7 @@ cleanup:
 	cd src/frontend && rm -rf .vite 2>/dev/null || true
 	cd src/frontend && rm -rf dist 2>/dev/null || true
 	rm -rf static
+	rm -rf src/ca2roi/static
 
 	# Clean system cache
 	rm -rf .DS_Store 2>/dev/null || true

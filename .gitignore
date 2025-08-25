@@ -1,5 +1,6 @@
 # Frontend
 static/
+src/ca2roi/static/
 data/
 *.zip
 

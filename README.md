@@ -6,7 +6,8 @@ The package is developed to provide light-weight and easy-to-use tools for calci
 Data can be saved in csv format for further analysis.
 (Please note in [issue](https://github.com/skim0119/CA2-Sandbox/issues) if you have desired format other than csv).
 
-![MiV-Ca2 Intensity Analysis Toolbox](assets-readme/v051.png)
+<!-- https://github.com/skim0119/Ca2-Sandbox/blob/main/assets-readme/v051.png -->
+![MiV-Ca2 Intensity Analysis Toolbox](https://github.com/skim0119/Ca2-Sandbox/blob/main/assets-readme/v051.png?raw=true)
 
 ## Easy installation
 
@@ -17,6 +18,8 @@ Data can be saved in csv format for further analysis.
 ## Easy launch
 
 `ca2roi-gui`
+
+links to [local](http://localhost:8000) by default.
 
 ## CLI usage (for batch processing)
 

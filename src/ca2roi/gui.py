@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import logging
 from pathlib import Path
 from typing import Optional, List
 import tempfile
@@ -11,7 +12,7 @@ from sklearn.metrics import r2_score
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import base64
 
@@ -71,6 +72,7 @@ def create_app():
         description="Calcium imaging ROI and bleaching analysis web interface",
         version=ca2roi_version,
     )
+    logger = logging.getLogger(__name__)
 
     # Add CORS middleware
     app.add_middleware(
@@ -82,15 +84,31 @@ def create_app():
     )
 
     # Mount static files
-    static_dir = Path(__file__).parent.parent.parent / "static"
-    if static_dir.exists():
-        app.mount(
-            "/static",
-            StaticFiles(directory=static_dir.as_posix(), html=True),
-            name="static",
-        )
+    import importlib.resources
+
+    module_path = importlib.resources.files(__package__)
+
+    static_path_candidates = [
+        module_path / "static",  # This path is used when the package is installed
+        Path(__file__).parent.parent.parent / "static",  # This path is for development
+    ]
+
+    for static_dir in static_path_candidates:
+        if static_dir.exists():
+            dir = static_dir.as_posix()
+            break
     else:
-        raise FileNotFoundError(f"Pre-built static directory not found: {static_dir}")
+        logger.error("Pre-built static directory not found.")
+        logger.error(f"Static directory path: {static_dir}")
+        logger.error(f"Current working directory: {os.getcwd()}")
+        raise FileNotFoundError("Pre-built static directory not found.")
+
+    app.mount(
+        "/static",
+        StaticFiles(directory=dir, html=True),
+        name="static",
+    )
+    logger.info(f"Static directory mounted from {dir}")
 
     return app
 
@@ -110,6 +128,7 @@ def assert_video_selected():
 @app.get("/")
 async def root():
     """Serve the main HTML page."""
+    return RedirectResponse(url="/static/index.html")
     static_dir = Path(__file__).parent.parent.parent / "static"
     index_path = static_dir / "index.html"
 
