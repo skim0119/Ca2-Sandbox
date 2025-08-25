@@ -77,7 +77,7 @@ watch(() => props.selectedROIs, (data) => {
   console.log('Intensity Tracing Plot:: Available ROIs:', props.availableROIs)
 
   const plottingROIs: ROI[] = props.availableROIs.filter(roi => data.includes(roi.id))
-  const maxLength: number = plottingROIs.length
+  const maxLength: number = plottingROIs[0].intensityTrace?.length ?? 0
   console.log('Intensity Tracing Plot:: Max length:', maxLength)
 
   // const labels = [...Array(maxLength).keys()]
@@ -86,13 +86,13 @@ watch(() => props.selectedROIs, (data) => {
 
   mainChartData.value = {
     labels: labels,
-    datasets: [{
-      label: 'temporary',
-      data: labels,
-      borderColor: '#ccc',
-      backgroundColor: '#f0f0f0',
+    datasets: plottingROIs.map((roi, idx) => ({
+      label: roi.name || `ROI ${roi.id}`,
+      data: roi.intensityTrace || [],
+      borderColor: roi.color || `hsl(${idx * 60}, 70%, 50%)`,
+      backgroundColor: roi.color ? `${roi.color}22` : `hsla(${idx * 60}, 70%, 50%, 0.1)`,
       tension: 0.1
-    }]
+    }))
   }
 }, { immediate: true }
 )
