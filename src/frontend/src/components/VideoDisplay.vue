@@ -42,7 +42,7 @@ const autoROIConfig = ref<AutoROIConfigType>({
 })
 
 const handleROIDrawn = async (coords: Coords) => {
-  await createROI(coords, props.selectedFiles[0], props.bleachingSettings)
+  await createROI(coords, props.bleachingSettings)
 }
 
 const handleROIToggle = async (roiId: number) => {
@@ -68,7 +68,7 @@ const handleAutoROIConfigUpdated = (config: AutoROIConfigType) => {
 
 const handleRunAutoROI = async () => {
   const newROICoordss = await runAutoROI(autoROIConfig.value)
-  newROICoordss.forEach(coords => createROI(coords, props.selectedFiles[0], props.bleachingSettings))
+  newROICoordss.forEach(coords => createROI(coords, props.bleachingSettings))
 }
 
 const handleRunAnalysis = () => {

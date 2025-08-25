@@ -31,7 +31,6 @@ export function useROIOperations(availableROIs: Ref<ROI[]>, selectedROIs: Ref<nu
 
   const createROI = async (
     coords: Coords,
-    videoPath: string,
     bleachingSettings?: BleachingSettings
   ): Promise<void> => {
     const roiId = nextRoiId.value++
@@ -58,13 +57,11 @@ export function useROIOperations(availableROIs: Ref<ROI[]>, selectedROIs: Ref<nu
       }
     } catch (error) {
       console.error('Failed to create ROI:', error)
+      nextRoiId.value--
     }
   }
 
   const selectROI = async (roiId: number): Promise<boolean> => {
-    const roi = availableROIs.value.find(r => r.id === roiId)
-    if (!roi) return false
-
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
       // Add this line to sync the arrays:
@@ -77,9 +74,6 @@ export function useROIOperations(availableROIs: Ref<ROI[]>, selectedROIs: Ref<nu
   }
 
   const unselectROI = async (roiId: number): Promise<boolean> => {
-    const roi = availableROIs.value.find(r => r.id === roiId)
-    if (!roi) return false
-
     const roiIndex = availableROIs.value.findIndex(r => r.id === roiId)
     if (roiIndex !== -1) {
       const index = selectedROIs.value.indexOf(roiId)
